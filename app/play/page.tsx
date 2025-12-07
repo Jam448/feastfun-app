@@ -229,13 +229,7 @@ export default function PlayPage() {
         <button
           onClick={() => router.push('/')}
           className="text-white/80 hover:text-white font-medium text-base"
-        ><button
-  onClick={() => router.push('/levels')}
-  className="w-full bg-white/20 text-white font-bold text-xl py-4 rounded-2xl hover:bg-white/25 active:scale-95 transition-all mb-3"
->
-  🌍 World Map (Levels)
-</button>
-
+        >
           Back to Home
         </button>
       </div>

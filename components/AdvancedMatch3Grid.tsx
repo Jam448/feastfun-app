@@ -4,10 +4,12 @@ import { useEffect, useState, useRef } from 'react'
 import { AdvancedMatch3Engine, Cell, SpecialType, FOOD_EMOJIS } from '@/lib/advanced-match3-engine'
 import { soundManager } from '@/lib/sound-manager'
 import { Sparkles, Zap } from 'lucide-react'
+import { TreatType } from '@/lib/level-configurations'
 
 interface AdvancedMatch3GridProps {
   rows?: number
   cols?: number
+  treats?: TreatType[]
   onScoreChange: (score: number) => void
   onMoveUsed: () => void
   isPaused: boolean
@@ -16,11 +18,12 @@ interface AdvancedMatch3GridProps {
 export function AdvancedMatch3Grid({
   rows = 8,
   cols = 8,
+  treats = [],
   onScoreChange,
   onMoveUsed,
   isPaused,
 }: AdvancedMatch3GridProps) {
-  const [engine] = useState(() => new AdvancedMatch3Engine(rows, cols))
+  const [engine] = useState(() => new AdvancedMatch3Engine(rows, cols, treats))
   const [grid, setGrid] = useState<(Cell | null)[][]>(() => engine.getGrid())
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)

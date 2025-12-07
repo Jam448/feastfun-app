@@ -37,13 +37,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        data: {
+          email_confirmed: true
+        }
       }
     })
+
+    if (!error && data.user) {
+      await (supabase as any).rpc('confirm_user_email', { user_id: data.user.id }).catch(() => {})
+    }
+
     return { error }
   }
 

@@ -3,9 +3,9 @@
 import { useState, useEffect, Suspense } from 'react'
 import Image from 'next/image'
 import { AdvancedMatch3Grid } from '@/components/AdvancedMatch3Grid'
-import { getLevelConfig } from '@/lib/game-config'
+import { getLevelConfig, TREATS, TreatType } from '@/lib/level-configurations'
 import { soundManager } from '@/lib/sound-manager'
-import { Star, Trophy, Heart, Coins, Home, Volume2, VolumeX, ArrowLeft } from 'lucide-react'
+import { Star, Trophy, Heart, Coins, Volume2, VolumeX, ArrowLeft, Target } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function Match3GameContent() {
@@ -33,15 +33,16 @@ function Match3GameContent() {
   }
 
   useEffect(() => {
-    setMovesLeft(levelConfig.maxMoves)
+    if (!levelConfig) return
+    setMovesLeft(levelConfig.moves)
     setScore(0)
     setGameState('playing')
-  }, [currentLevel, levelConfig.maxMoves])
+  }, [currentLevel, levelConfig])
 
   const handleScoreChange = (points: number) => {
     setScore(prev => {
       const newScore = prev + points
-      if (newScore >= levelConfig.objectives[0].target && movesLeft > 0) {
+      if (levelConfig && newScore >= levelConfig.objectives[0].target && movesLeft > 0) {
         setTimeout(() => setGameState('win'), 500)
       }
       return newScore
@@ -51,7 +52,7 @@ function Match3GameContent() {
   const handleMoveUsed = () => {
     setMovesLeft(prev => {
       const newMoves = prev - 1
-      if (newMoves === 0) {
+      if (newMoves === 0 && levelConfig) {
         setTimeout(() => {
           if (score >= levelConfig.objectives[0].target) {
             setGameState('win')
@@ -69,10 +70,11 @@ function Match3GameContent() {
   }
 
   const getStarsEarned = (): number => {
+    if (!levelConfig) return 0
     const totalScore = score + getMoveCompletionBonus()
-    if (totalScore >= levelConfig.starThresholds[2]) return 3
-    if (totalScore >= levelConfig.starThresholds[1]) return 2
-    if (totalScore >= levelConfig.starThresholds[0]) return 1
+    if (totalScore >= levelConfig.starThresholds[3]) return 3
+    if (totalScore >= levelConfig.starThresholds[2]) return 2
+    if (totalScore >= levelConfig.starThresholds[1]) return 1
     return 0
   }
 
@@ -92,10 +94,19 @@ function Match3GameContent() {
   }
 
   const handleRetry = () => {
-    setMovesLeft(levelConfig.maxMoves)
+    if (!levelConfig) return
+    setMovesLeft(levelConfig.moves)
     setScore(0)
     setGameState('playing')
     setLives(prev => Math.max(0, prev - 1))
+  }
+
+  if (!levelConfig) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-white">Level not found</div>
+      </div>
+    )
   }
 
   return (
@@ -142,30 +153,47 @@ function Match3GameContent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-gradient-to-br from-white/15 to-white/5 rounded-xl p-3 border border-white/20">
-            <div className="text-white/70 text-xs font-medium mb-1">Score</div>
-            <div className="text-white font-black text-2xl">{score.toLocaleString()}</div>
-            <div className="text-white/60 text-xs mt-0.5">Goal: {levelConfig.objectives[0].target.toLocaleString()}</div>
+        <div className="bg-gradient-to-br from-white/15 to-white/5 rounded-xl p-4 mb-4 border border-white/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-4 h-4 text-yellow-300" />
+            <div className="text-white/90 text-sm font-bold">Objective</div>
           </div>
-          <div className="bg-gradient-to-br from-white/15 to-white/5 rounded-xl p-3 border border-white/20">
-            <div className="text-white/70 text-xs font-medium mb-1">Moves</div>
-            <div className="text-white font-black text-2xl">{movesLeft}</div>
-            <div className="text-white/60 text-xs mt-0.5">Max: {levelConfig.maxMoves}</div>
+          <div className="text-white text-xs mb-2">{levelConfig.objectives[0].description}</div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <div className="text-white/70 text-xs mb-1">Score</div>
+              <div className="text-white font-black text-xl">{score.toLocaleString()}</div>
+            </div>
+            <div className="flex-1">
+              <div className="text-white/70 text-xs mb-1">Moves</div>
+              <div className="text-white font-black text-xl">{movesLeft}</div>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-2 mb-3">
           {[1, 2, 3].map(star => (
             <Star
               key={star}
               className={`w-8 h-8 transition-all ${
-                score >= levelConfig.starThresholds[star - 1]
+                score >= (levelConfig.starThresholds as any)[star]
                   ? 'fill-yellow-300 text-yellow-300 scale-110 drop-shadow-lg'
                   : 'text-white/20'
               }`}
             />
           ))}
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {levelConfig.treats.map((treatId: TreatType) => {
+            const treat = TREATS[treatId]
+            return (
+              <div key={treatId} className="flex-shrink-0 bg-white/10 rounded-lg px-3 py-2 border border-white/20">
+                <div className="text-2xl mb-1">{treat.emoji}</div>
+                <div className="text-white/70 text-xs text-center whitespace-nowrap">{treat.name.split(' ')[0]}</div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -174,6 +202,7 @@ function Match3GameContent() {
           <AdvancedMatch3Grid
             rows={levelConfig.gridSize.rows}
             cols={levelConfig.gridSize.cols}
+            treats={levelConfig.treats}
             onScoreChange={handleScoreChange}
             onMoveUsed={handleMoveUsed}
             isPaused={isPaused}

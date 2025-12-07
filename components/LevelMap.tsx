@@ -1,10 +1,9 @@
 'use client'
-console.log('LEVELMAP VERSION: LOCAL FALLBACK ACTIVE')
 
 import { useState, useEffect } from 'react'
 import { Star, Lock, Trophy, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { getLevelConfig } from '@/lib/level-configurations'
+import { LEVEL_CONFIGS, getLevelConfig } from '@/lib/level-configurations'
 import { AuthButton } from '@/components/AuthButton'
 
 interface Level {
@@ -32,24 +31,6 @@ interface LevelMapProps {
   onLevelSelect: (level: Level) => void
 }
 
-function buildLocalLevels(count = 30): Level[] {
-  return Array.from({ length: count }, (_, i) => {
-    const n = i + 1
-    const cfg = getLevelConfig(n)
-    return {
-      id: `local-${n}`,
-      level_number: cfg.level_number,
-      name: cfg.name,
-      description: cfg.description,
-      world: cfg.world,
-      target_score: cfg.target_score,
-      star_thresholds: cfg.star_thresholds,
-      unlock_cost: cfg.unlock_cost,
-      rewards: cfg.rewards,
-    }
-  })
-}
-
 export function LevelMap({ onLevelSelect }: LevelMapProps) {
   const [levels, setLevels] = useState<Level[]>([])
   const [playerProgress, setPlayerProgress] = useState<Map<string, PlayerLevel>>(new Map())
@@ -59,60 +40,56 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
   useEffect(() => {
     loadLevelsAndProgress()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadLevelsAndProgress = async () => {
-    setLoading(true)
-
     try {
-      const { data: userRes } = await supabase.auth.getUser()
-      const user = userRes?.user ?? null
+      const { data: { user } } = await supabase.auth.getUser()
       setIsAuthenticated(!!user)
 
-      // 1) Try to load levels from Supabase
-      let levelsData: any[] | null = null
-      let levelsError: any = null
+      const { data: levelsData, error: levelsError } = await (supabase as any)
+        .from('levels')
+        .select('*')
+        .order('level_number')
 
-      try {
-        const res = await (supabase as any)
-          .from('levels')
-          .select('*')
-          .order('level_number')
-
-        levelsData = res?.data ?? null
-        levelsError = res?.error ?? null
-      } catch (e) {
-        levelsError = e
+      if (levelsError) {
+        console.warn('Failed to load levels from database, using local configs:', levelsError)
+        const fallbackLevels = LEVEL_CONFIGS.map(config => ({
+          id: `local-${config.levelNumber}`,
+          level_number: config.levelNumber,
+          name: `Level ${config.levelNumber}`,
+          description: config.objectives[0]?.description || '',
+          world: config.world,
+          target_score: config.starThresholds[1],
+          star_thresholds: config.starThresholds,
+          unlock_cost: 0,
+          rewards: { crumbs: 50 }
+        }))
+        setLevels(fallbackLevels)
+      } else if (!levelsData || levelsData.length === 0) {
+        console.log('No levels in database, using local configs as fallback')
+        const fallbackLevels = LEVEL_CONFIGS.map(config => ({
+          id: `local-${config.levelNumber}`,
+          level_number: config.levelNumber,
+          name: `Level ${config.levelNumber}`,
+          description: config.objectives[0]?.description || '',
+          world: config.world,
+          target_score: config.starThresholds[1],
+          star_thresholds: config.starThresholds,
+          unlock_cost: 0,
+          rewards: { crumbs: 50 }
+        }))
+        setLevels(fallbackLevels)
+      } else {
+        setLevels(levelsData)
       }
 
-      // 2) If Supabase levels are missing/empty/error -> fall back to local configs
-      const useLocal = !!levelsError || !Array.isArray(levelsData) || levelsData.length === 0
-
-      if (useLocal) {
-        if (levelsError) console.warn('LevelMap: Supabase levels unavailable, using local fallback.', levelsError)
-        const localLevels = buildLocalLevels(30)
-        setLevels(localLevels)
-
-        // For local fallback: if signed in, we still try to pull progress,
-        // but player_levels table references Supabase level IDs. We won’t try to auto-unlock here.
-        setPlayerProgress(new Map())
-        setLoading(false)
-        return
-      }
-
-      // 3) Supabase levels exist
-      setLevels(levelsData as Level[])
-
-      // 4) Load player progress (only if signed in)
       if (user) {
-        const progressRes = await (supabase as any)
+        const { data: progressData, error: progressError } = await (supabase as any)
           .from('player_levels')
           .select('*')
           .eq('player_id', user.id)
 
-        const progressData = progressRes?.data ?? []
-        const progressError = progressRes?.error ?? null
         if (progressError) throw progressError
 
         const progressMap = new Map<string, PlayerLevel>()
@@ -120,12 +97,10 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           progressMap.set(p.level_id, p)
         })
 
-        // Auto-unlock first level if none exist yet
-        if (Array.isArray(levelsData) && levelsData.length > 0 && (!progressData || progressData.length === 0)) {
-          const firstId = (levelsData[0] as any).id
-          await unlockFirstLevel(firstId, user.id)
-          progressMap.set(firstId, {
-            level_id: firstId,
+        if (levelsData && levelsData.length > 0 && progressData?.length === 0) {
+          await unlockFirstLevel(levelsData[0].id, user?.id)
+          progressMap.set(levelsData[0].id, {
+            level_id: levelsData[0].id,
             unlocked: true,
             completed: false,
             stars_earned: 0,
@@ -135,14 +110,9 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         }
 
         setPlayerProgress(progressMap)
-      } else {
-        setPlayerProgress(new Map())
       }
     } catch (error) {
-      console.error('LevelMap: Failed to load levels:', error)
-      // Hard fallback so the UI still works
-      setLevels(buildLocalLevels(30))
-      setPlayerProgress(new Map())
+      console.error('Failed to load levels:', error)
     } finally {
       setLoading(false)
     }
@@ -150,6 +120,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
   const unlockFirstLevel = async (levelId: string, userId?: string) => {
     if (!userId) return
+
     try {
       await (supabase as any).from('player_levels').insert({
         player_id: userId,
@@ -161,22 +132,32 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         times_played: 0,
       })
     } catch (error) {
-      console.error('LevelMap: Failed to unlock first level:', error)
+      console.error('Failed to unlock first level:', error)
     }
   }
 
-  const worlds = ['Cookie Forest', 'Candy Mountains', 'Cocoa Castle'] as const
-
-  const worldColors: Record<(typeof worlds)[number], string> = {
+  const worlds = ['Cookie Forest', 'Candy Mountains', 'Cocoa Castle']
+  const worldColors = {
     'Cookie Forest': 'from-green-600 to-emerald-700',
     'Candy Mountains': 'from-pink-600 to-purple-700',
     'Cocoa Castle': 'from-amber-700 to-orange-800',
   }
 
+  const worldDecorations = {
+    'Cookie Forest': ['🎄', '🍪', '🥨', '🎅', '🌲', '❄️'],
+    'Candy Mountains': ['🍬', '🍭', '🧸', '🍫', '⛰️', '🌸'],
+    'Cocoa Castle': ['☕', '💋', '🏰', '🟫', '🍂', '✨'],
+  }
+
+  const worldDescriptions = {
+    'Cookie Forest': 'Journey through the festive cookie-filled forest!',
+    'Candy Mountains': 'Climb the sweet peaks of candy paradise!',
+    'Cocoa Castle': 'Conquer the chocolate fortress!',
+  }
+
   const filteredLevels = levels.filter((l) => l.world === selectedWorld)
 
   const canUnlock = (level: Level): boolean => {
-    // guests can only play level 1
     if (!isAuthenticated) return level.level_number === 1
 
     if (level.level_number === 1) return true
@@ -187,12 +168,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   }
 
   const handleLevelClick = async (level: Level) => {
-    // local fallback levels: just allow click, and treat it like guest mode unless you wire IDs later
-    if (level.id.startsWith('local-')) {
-      onLevelSelect(level)
-      return
-    }
-
     if (!isAuthenticated) {
       onLevelSelect(level)
       return
@@ -203,8 +178,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     if (progress?.unlocked) {
       onLevelSelect(level)
     } else if (canUnlock(level)) {
-      const { data: userRes } = await supabase.auth.getUser()
-      const user = userRes?.user
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       try {
@@ -220,36 +194,41 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
         await loadLevelsAndProgress()
       } catch (error) {
-        console.error('LevelMap: Failed to unlock level:', error)
+        console.error('Failed to unlock level:', error)
       }
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-white text-xl">Loading levels...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-600 via-red-700 to-red-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-20 w-20 border-4 border-white/30 border-t-white mx-auto mb-4" />
+          <p className="text-white font-bold text-lg">Loading World Map...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-4 pb-24">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-4xl font-bold text-white">Level Map</h1>
+    <div className="min-h-screen pb-24 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[url('/snowflakes.svg')] opacity-10 pointer-events-none" />
+
+      <div className="relative z-10 max-w-4xl mx-auto p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-4xl font-black text-white drop-shadow-lg">World Map</h1>
           <AuthButton />
         </div>
 
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        <div className="flex gap-2 mb-5 overflow-x-auto pb-2 scrollbar-hide">
           {worlds.map((world) => (
             <button
               key={world}
               onClick={() => setSelectedWorld(world)}
-              className={`px-4 py-2 rounded-lg font-semibold whitespace-nowrap transition-all ${
+              className={`px-6 py-3 rounded-xl font-black whitespace-nowrap transition-all shadow-lg ${
                 selectedWorld === world
-                  ? 'bg-white text-red-600 scale-105'
-                  : 'bg-white/20 text-white hover:bg-white/30'
+                  ? 'bg-gradient-to-br from-white to-yellow-50 text-red-600 scale-105 border-2 border-yellow-300'
+                  : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border-2 border-white/20'
               }`}
             >
               {world}
@@ -257,20 +236,40 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           ))}
         </div>
 
-        <div
-          className={`bg-gradient-to-br ${
-            worldColors[selectedWorld as keyof typeof worldColors] ?? 'from-red-600 to-red-800'
-          } rounded-2xl p-6 shadow-2xl`}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {filteredLevels.map((level) => {
+        <div className={`bg-gradient-to-br ${worldColors[selectedWorld as keyof typeof worldColors]} rounded-3xl p-5 shadow-2xl border-4 border-white/20 relative overflow-hidden`}>
+          <div className="absolute inset-0 bg-[url('/sparkles.svg')] opacity-5 pointer-events-none" />
+
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {worldDecorations[selectedWorld as keyof typeof worldDecorations].map((emoji, i) => (
+              <div
+                key={i}
+                className="absolute text-4xl opacity-20 animate-float"
+                style={{
+                  left: `${(i * 17 + 5) % 95}%`,
+                  top: `${(i * 23 + 10) % 85}%`,
+                  animationDelay: `${i * 0.7}s`,
+                  animationDuration: `${4 + i % 3}s`
+                }}
+              >
+                {emoji}
+              </div>
+            ))}
+          </div>
+
+          <div className="relative z-10 mb-4 text-center">
+            <h2 className="text-2xl font-black text-white drop-shadow-lg mb-1">{selectedWorld}</h2>
+            <p className="text-white/90 font-semibold text-sm">
+              {worldDescriptions[selectedWorld as keyof typeof worldDescriptions]}
+            </p>
+          </div>
+
+          <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+            {filteredLevels.map((level, index) => {
               const progress = playerProgress.get(level.id)
-              const isLocal = level.id.startsWith('local-')
-              const isUnlocked =
-                isLocal || !isAuthenticated || progress?.unlocked || level.level_number === 1
+              const isUnlocked = !isAuthenticated || progress?.unlocked || level.level_number === 1
               const isCompleted = progress?.completed || false
               const stars = progress?.stars_earned || 0
-              const canBeUnlocked = isLocal ? true : canUnlock(level)
+              const canBeUnlocked = canUnlock(level)
               const isBossLevel = level.level_number % 10 === 0
 
               return (
@@ -278,45 +277,53 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
                   key={level.id}
                   onClick={() => handleLevelClick(level)}
                   disabled={!isUnlocked && !canBeUnlocked}
-                  className={`relative aspect-square rounded-xl p-4 flex flex-col items-center justify-center transition-all ${
-                    isBossLevel ? 'col-span-2' : ''
+                  className={`relative aspect-square rounded-2xl p-3 flex flex-col items-center justify-center transition-all ${
+                    isBossLevel ? 'col-span-2 row-span-2' : ''
                   } ${
                     isUnlocked
-                      ? 'bg-white hover:scale-105 shadow-lg cursor-pointer'
+                      ? 'bg-gradient-to-br from-white to-yellow-50 hover:scale-105 shadow-xl cursor-pointer border-4 border-white/60'
                       : canBeUnlocked
-                      ? 'bg-white/50 hover:scale-105 cursor-pointer border-2 border-yellow-400 border-dashed'
-                      : 'bg-black/30 cursor-not-allowed opacity-50'
+                      ? 'bg-gradient-to-br from-yellow-200/80 to-yellow-300/80 hover:scale-105 cursor-pointer border-4 border-yellow-400 border-dashed animate-pulse'
+                      : 'bg-black/40 cursor-not-allowed opacity-60 border-4 border-black/20'
                   }`}
                 >
-                  {isBossLevel && (
-                    <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-2">
-                      <Trophy className="w-5 h-5 text-yellow-900" />
+                  {isBossLevel && isUnlocked && (
+                    <div className="absolute -top-3 -right-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full p-2 shadow-lg border-2 border-white animate-bounce">
+                      <Trophy className="w-6 h-6 text-white" />
                     </div>
                   )}
 
-                  {!isUnlocked && !canBeUnlocked && <Lock className="w-8 h-8 text-gray-400 mb-2" />}
+                  {!isUnlocked && !canBeUnlocked && (
+                    <Lock className="w-10 h-10 text-gray-400 mb-1" />
+                  )}
 
                   {!isUnlocked && canBeUnlocked && (
-                    <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
-                      <ChevronRight className="w-4 h-4 text-yellow-900" />
+                    <div className="absolute -top-2 -right-2 bg-gradient-to-br from-green-400 to-green-600 rounded-full p-1.5 shadow-lg border-2 border-white animate-bounce">
+                      <ChevronRight className="w-5 h-5 text-white" />
                     </div>
                   )}
 
-                  <div className={`text-2xl font-bold mb-1 ${isUnlocked ? 'text-red-600' : 'text-white'}`}>
+                  <div className={`${isBossLevel ? 'text-5xl' : 'text-3xl'} font-black mb-1 ${
+                    isUnlocked ? 'text-red-600 drop-shadow-sm' : 'text-white drop-shadow-lg'
+                  }`}>
                     {level.level_number}
                   </div>
 
-                  <div className={`text-xs font-semibold text-center mb-2 ${isUnlocked ? 'text-gray-700' : 'text-white/70'}`}>
+                  <div className={`text-xs font-bold text-center mb-1 leading-tight ${
+                    isUnlocked ? 'text-gray-700' : 'text-white/90'
+                  }`}>
                     {level.name}
                   </div>
 
-                  {isUnlocked && isAuthenticated && !isLocal && (
-                    <div className="flex gap-1">
+                  {isUnlocked && isAuthenticated && (
+                    <div className="flex gap-0.5">
                       {[1, 2, 3].map((star) => (
                         <Star
                           key={star}
-                          className={`w-4 h-4 ${
-                            star <= stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'
+                          className={`w-5 h-5 ${
+                            star <= stars
+                              ? 'text-yellow-400 fill-yellow-400 drop-shadow-md'
+                              : 'text-gray-300 fill-gray-300'
                           }`}
                         />
                       ))}
@@ -324,7 +331,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
                   )}
 
                   {isCompleted && (
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm px-3 py-1 rounded-full font-black shadow-lg border-2 border-white">
                       ✓
                     </div>
                   )}
@@ -334,20 +341,27 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           </div>
 
           {filteredLevels.length === 0 && (
-            <div className="text-center text-white text-xl py-12">No levels in this world yet!</div>
+            <div className="text-center text-white text-xl py-12 font-bold">
+              No levels in this world yet!
+            </div>
           )}
         </div>
 
         {!isAuthenticated && (
-          <div className="mt-6 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 rounded-2xl p-6 text-center shadow-xl border-2 border-white/30">
-            <div className="text-4xl mb-3">🔒</div>
-            <h3 className="text-white font-bold text-xl mb-2">Save Your Progress!</h3>
-            <p className="text-white/90 text-sm mb-4">
-              Sign in to unlock all features, save progress, earn rewards, and compete on leaderboards!
-            </p>
-            <p className="text-white/80 text-xs mb-4">
-              Future: Connect Solana wallet for NFT rewards and exclusive items
-            </p>
+          <div className="mt-6 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-500 rounded-3xl p-6 text-center shadow-2xl border-4 border-white/40 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[url('/sparkles.svg')] opacity-10 pointer-events-none" />
+            <div className="relative z-10">
+              <div className="text-5xl mb-4 animate-bounce">🔒</div>
+              <h3 className="text-white font-black text-2xl mb-3 drop-shadow-lg">Save Your Progress!</h3>
+              <p className="text-white font-semibold text-base mb-4 leading-relaxed">
+                Sign in to unlock all features, save progress, earn rewards, and compete on leaderboards!
+              </p>
+              <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm border border-white/30">
+                <p className="text-white/95 text-sm font-medium">
+                  🎁 Future: Connect Solana wallet for NFT rewards and exclusive items
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,8 @@
-export type FoodType = 'candy_cane' | 'gingerbread' | 'cookie' | 'cupcake' | 'pudding' | 'pie'
+export type FoodType =
+  | 'candy_cane' | 'gingerbread' | 'cookie' | 'cupcake' | 'pudding' | 'pie'
+  | 'choc_chip' | 'sugar_tree' | 'snickerdoodle' | 'oatmeal' | 'peanut_butter'
+  | 'candy_bar' | 'wrapped_candy' | 'candy_cane' | 'lollipop' | 'gummy' | 'jellybean'
+  | 'hershey_kiss' | 'truffle' | 'brownie' | 'hot_chocolate' | 'cocoa_powder' | 'chocolate_bar'
 
 export type SpecialType =
   | 'none'
@@ -39,13 +43,29 @@ export interface MoveResult {
   }
 }
 
-const FOOD_EMOJIS: Record<FoodType, string> = {
+export const FOOD_EMOJIS: Record<FoodType, string> = {
   candy_cane: '🍬',
-  gingerbread: '🍪',
+  gingerbread: '🧑‍🍳',
   cookie: '🥠',
   cupcake: '🧁',
   pudding: '🍮',
   pie: '🥧',
+  choc_chip: '🍪',
+  sugar_tree: '🎄',
+  snickerdoodle: '🥨',
+  oatmeal: '🥐',
+  peanut_butter: '🥜',
+  candy_bar: '🍫',
+  wrapped_candy: '🍬',
+  lollipop: '🍭',
+  gummy: '🧸',
+  jellybean: '🫘',
+  hershey_kiss: '💋',
+  truffle: '⚫',
+  brownie: '🟫',
+  hot_chocolate: '☕',
+  cocoa_powder: '🍂',
+  chocolate_bar: '🍫',
 }
 
 export class AdvancedMatch3Engine {
@@ -53,17 +73,20 @@ export class AdvancedMatch3Engine {
   private rows: number
   private cols: number
   private comboMultiplier: number = 1
+  private availableFoods: FoodType[]
 
-  constructor(rows: number = 8, cols: number = 8) {
+  constructor(rows: number = 8, cols: number = 8, customFoods?: string[]) {
     this.rows = rows
     this.cols = cols
+    this.availableFoods = customFoods && customFoods.length > 0
+      ? customFoods as FoodType[]
+      : ['candy_cane', 'gingerbread', 'cookie', 'cupcake', 'pudding', 'pie']
     this.grid = []
     this.initializeGrid()
   }
 
   private generateRandomFood(): FoodType {
-    const foods: FoodType[] = ['candy_cane', 'gingerbread', 'cookie', 'cupcake', 'pudding', 'pie']
-    return foods[Math.floor(Math.random() * foods.length)]
+    return this.availableFoods[Math.floor(Math.random() * this.availableFoods.length)]
   }
 
   private createCell(row: number, col: number, foodType?: FoodType, specialType: SpecialType = 'none'): Cell {
@@ -713,5 +736,3 @@ export class AdvancedMatch3Engine {
     return false
   }
 }
-
-export { FOOD_EMOJIS }

@@ -46,6 +46,18 @@
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
   }
 
+  .glass-card {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .glass-stat {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
   .card-elevated {
     box-shadow:
       0 10px 20px rgba(0, 0, 0, 0.15),
@@ -151,5 +163,33 @@
 
   .animate-fall {
     animation: fall-down 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px) translateX(0px) rotate(0deg);
+    }
+    25% {
+      transform: translateY(-20px) translateX(10px) rotate(5deg);
+    }
+    50% {
+      transform: translateY(-10px) translateX(-10px) rotate(-5deg);
+    }
+    75% {
+      transform: translateY(-25px) translateX(5px) rotate(3deg);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
   }
 }
