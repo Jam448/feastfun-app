@@ -19,9 +19,9 @@ type UseProgressionResult = {
 
 /**
  * Loads basic progression stats for the signed-in player.
- * This is intentionally typed to avoid `never` inference during Next build.
+ * Build-safe with strict TS + untyped Supabase client.
  *
- * Expected table: player_progress
+ * Expected table (can change later): player_progress
  * Expected columns: player_id, total_stars, crumbs, highest_unlocked_level
  */
 export function useProgression(userId?: string): UseProgressionResult {
@@ -31,6 +31,7 @@ export function useProgression(userId?: string): UseProgressionResult {
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
+    // no user -> default values
     if (!userId) {
       setTotalStars(0)
       setCrumbs(0)
@@ -42,12 +43,15 @@ export function useProgression(userId?: string): UseProgressionResult {
     setLoading(true)
 
     try {
-      const { data, error } = await (supabase as any)
+      // NOTE: do NOT use `.returns<T>()` here because supabase is `any` in this project.
+      const res = await (supabase as any)
         .from('player_progress')
         .select('total_stars, crumbs, highest_unlocked_level')
         .eq('player_id', userId)
         .maybeSingle()
-        .returns<PlayerProgressRow>()
+
+      const data = (res?.data ?? null) as PlayerProgressRow | null
+      const error = res?.error as any
 
       if (error) {
         console.error('useProgression: failed to load player_progress', error)
