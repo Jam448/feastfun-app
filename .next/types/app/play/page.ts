@@ -1,4 +1,4 @@
-// File: /home/project/app/play/page.tsx
+// File: C:\Users\pbjam\OneDrive\Desktop\feastfun-app\app\play\page.tsx
 import * as entry from '../../../../app/play/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

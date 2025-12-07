@@ -1,4 +1,4 @@
-// File: /home/project/app/locker/page.tsx
+// File: C:\Users\pbjam\OneDrive\Desktop\feastfun-app\app\locker\page.tsx
 import * as entry from '../../../../app/locker/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

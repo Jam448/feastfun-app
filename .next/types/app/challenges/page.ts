@@ -1,4 +1,4 @@
-// File: /home/project/app/challenges/page.tsx
+// File: C:\Users\pbjam\OneDrive\Desktop\feastfun-app\app\challenges\page.tsx
 import * as entry from '../../../../app/challenges/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
