@@ -1,4 +1,5 @@
 'use client'
+console.log('LEVELMAP VERSION: LOCAL FALLBACK ACTIVE')
 
 import { useState, useEffect } from 'react'
 import { Star, Lock, Trophy, ChevronRight } from 'lucide-react'
