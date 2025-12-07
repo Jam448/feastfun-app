@@ -1,0 +1,26 @@
+{
+  "name": "FeastFun - Party Game Hub",
+  "short_name": "FeastFun",
+  "description": "Party games, bite-sized chaos. Fast arcade games with progression!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fb923c",
+  "theme_color": "#fb923c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "screenshots": []
+}
