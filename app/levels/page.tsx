@@ -41,7 +41,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex justify-center md:justify-end">
-            <div className="relative h-64 w-64 sm:h-80 sm:w-80 animate-bounce [animation-duration:3s]">
+<div className="relative h-64 w-64 sm:h-80 sm:w-80 animate-bounce [animation-duration:3s]">
               <Image
                 src="/santa_pockets.png"
                 alt="Pockets"
