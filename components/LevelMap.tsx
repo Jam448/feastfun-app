@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Star, Lock, Trophy, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { LEVEL_CONFIGS, getLevelConfig } from '@/lib/level-configurations'
+import { getLevelConfig } from '@/lib/level-configurations'
 import { AuthButton } from '@/components/AuthButton'
 
 interface Level {
@@ -31,6 +31,24 @@ interface LevelMapProps {
   onLevelSelect: (level: Level) => void
 }
 
+function buildLocalLevels(count = 30): Level[] {
+  return Array.from({ length: count }, (_, i) => {
+    const n = i + 1
+    const cfg = getLevelConfig(n)
+    return {
+      id: `local-${n}`,
+      level_number: cfg.level_number,
+      name: cfg.name,
+      description: cfg.description,
+      world: cfg.world,
+      target_score: cfg.target_score,
+      star_thresholds: cfg.star_thresholds,
+      unlock_cost: cfg.unlock_cost,
+      rewards: cfg.rewards,
+    }
+  })
+}
+
 export function LevelMap({ onLevelSelect }: LevelMapProps) {
   const [levels, setLevels] = useState<Level[]>([])
   const [playerProgress, setPlayerProgress] = useState<Map<string, PlayerLevel>>(new Map())
@@ -40,28 +58,60 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
   useEffect(() => {
     loadLevelsAndProgress()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadLevelsAndProgress = async () => {
+    setLoading(true)
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: userRes } = await supabase.auth.getUser()
+      const user = userRes?.user ?? null
       setIsAuthenticated(!!user)
 
-      const { data: levelsData, error: levelsError } = await (supabase as any)
-        .from('levels')
-        .select('*')
-        .order('level_number')
+      // 1) Try to load levels from Supabase
+      let levelsData: any[] | null = null
+      let levelsError: any = null
 
-      if (levelsError) throw levelsError
+      try {
+        const res = await (supabase as any)
+          .from('levels')
+          .select('*')
+          .order('level_number')
 
-      setLevels(levelsData || [])
+        levelsData = res?.data ?? null
+        levelsError = res?.error ?? null
+      } catch (e) {
+        levelsError = e
+      }
 
+      // 2) If Supabase levels are missing/empty/error -> fall back to local configs
+      const useLocal = !!levelsError || !Array.isArray(levelsData) || levelsData.length === 0
+
+      if (useLocal) {
+        if (levelsError) console.warn('LevelMap: Supabase levels unavailable, using local fallback.', levelsError)
+        const localLevels = buildLocalLevels(30)
+        setLevels(localLevels)
+
+        // For local fallback: if signed in, we still try to pull progress,
+        // but player_levels table references Supabase level IDs. We won’t try to auto-unlock here.
+        setPlayerProgress(new Map())
+        setLoading(false)
+        return
+      }
+
+      // 3) Supabase levels exist
+      setLevels(levelsData as Level[])
+
+      // 4) Load player progress (only if signed in)
       if (user) {
-        const { data: progressData, error: progressError } = await (supabase as any)
+        const progressRes = await (supabase as any)
           .from('player_levels')
           .select('*')
           .eq('player_id', user.id)
 
+        const progressData = progressRes?.data ?? []
+        const progressError = progressRes?.error ?? null
         if (progressError) throw progressError
 
         const progressMap = new Map<string, PlayerLevel>()
@@ -69,10 +119,12 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           progressMap.set(p.level_id, p)
         })
 
-        if (levelsData && levelsData.length > 0 && progressData?.length === 0) {
-          await unlockFirstLevel(levelsData[0].id, user?.id)
-          progressMap.set(levelsData[0].id, {
-            level_id: levelsData[0].id,
+        // Auto-unlock first level if none exist yet
+        if (Array.isArray(levelsData) && levelsData.length > 0 && (!progressData || progressData.length === 0)) {
+          const firstId = (levelsData[0] as any).id
+          await unlockFirstLevel(firstId, user.id)
+          progressMap.set(firstId, {
+            level_id: firstId,
             unlocked: true,
             completed: false,
             stars_earned: 0,
@@ -82,9 +134,14 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         }
 
         setPlayerProgress(progressMap)
+      } else {
+        setPlayerProgress(new Map())
       }
     } catch (error) {
-      console.error('Failed to load levels:', error)
+      console.error('LevelMap: Failed to load levels:', error)
+      // Hard fallback so the UI still works
+      setLevels(buildLocalLevels(30))
+      setPlayerProgress(new Map())
     } finally {
       setLoading(false)
     }
@@ -92,7 +149,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
   const unlockFirstLevel = async (levelId: string, userId?: string) => {
     if (!userId) return
-
     try {
       await (supabase as any).from('player_levels').insert({
         player_id: userId,
@@ -104,12 +160,13 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         times_played: 0,
       })
     } catch (error) {
-      console.error('Failed to unlock first level:', error)
+      console.error('LevelMap: Failed to unlock first level:', error)
     }
   }
 
-  const worlds = ['Cookie Forest', 'Candy Mountains', 'Cocoa Castle']
-  const worldColors = {
+  const worlds = ['Cookie Forest', 'Candy Mountains', 'Cocoa Castle'] as const
+
+  const worldColors: Record<(typeof worlds)[number], string> = {
     'Cookie Forest': 'from-green-600 to-emerald-700',
     'Candy Mountains': 'from-pink-600 to-purple-700',
     'Cocoa Castle': 'from-amber-700 to-orange-800',
@@ -118,6 +175,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   const filteredLevels = levels.filter((l) => l.world === selectedWorld)
 
   const canUnlock = (level: Level): boolean => {
+    // guests can only play level 1
     if (!isAuthenticated) return level.level_number === 1
 
     if (level.level_number === 1) return true
@@ -128,6 +186,12 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   }
 
   const handleLevelClick = async (level: Level) => {
+    // local fallback levels: just allow click, and treat it like guest mode unless you wire IDs later
+    if (level.id.startsWith('local-')) {
+      onLevelSelect(level)
+      return
+    }
+
     if (!isAuthenticated) {
       onLevelSelect(level)
       return
@@ -138,7 +202,8 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     if (progress?.unlocked) {
       onLevelSelect(level)
     } else if (canUnlock(level)) {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: userRes } = await supabase.auth.getUser()
+      const user = userRes?.user
       if (!user) return
 
       try {
@@ -154,7 +219,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
 
         await loadLevelsAndProgress()
       } catch (error) {
-        console.error('Failed to unlock level:', error)
+        console.error('LevelMap: Failed to unlock level:', error)
       }
     }
   }
@@ -191,14 +256,20 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           ))}
         </div>
 
-        <div className={`bg-gradient-to-br ${worldColors[selectedWorld as keyof typeof worldColors]} rounded-2xl p-6 shadow-2xl`}>
+        <div
+          className={`bg-gradient-to-br ${
+            worldColors[selectedWorld as keyof typeof worldColors] ?? 'from-red-600 to-red-800'
+          } rounded-2xl p-6 shadow-2xl`}
+        >
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {filteredLevels.map((level, index) => {
+            {filteredLevels.map((level) => {
               const progress = playerProgress.get(level.id)
-              const isUnlocked = !isAuthenticated || progress?.unlocked || level.level_number === 1
+              const isLocal = level.id.startsWith('local-')
+              const isUnlocked =
+                isLocal || !isAuthenticated || progress?.unlocked || level.level_number === 1
               const isCompleted = progress?.completed || false
               const stars = progress?.stars_earned || 0
-              const canBeUnlocked = canUnlock(level)
+              const canBeUnlocked = isLocal ? true : canUnlock(level)
               const isBossLevel = level.level_number % 10 === 0
 
               return (
@@ -222,9 +293,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
                     </div>
                   )}
 
-                  {!isUnlocked && !canBeUnlocked && (
-                    <Lock className="w-8 h-8 text-gray-400 mb-2" />
-                  )}
+                  {!isUnlocked && !canBeUnlocked && <Lock className="w-8 h-8 text-gray-400 mb-2" />}
 
                   {!isUnlocked && canBeUnlocked && (
                     <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
@@ -240,7 +309,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
                     {level.name}
                   </div>
 
-                  {isUnlocked && isAuthenticated && (
+                  {isUnlocked && isAuthenticated && !isLocal && (
                     <div className="flex gap-1">
                       {[1, 2, 3].map((star) => (
                         <Star
@@ -264,9 +333,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           </div>
 
           {filteredLevels.length === 0 && (
-            <div className="text-center text-white text-xl py-12">
-              No levels in this world yet!
-            </div>
+            <div className="text-center text-white text-xl py-12">No levels in this world yet!</div>
           )}
         </div>
 
