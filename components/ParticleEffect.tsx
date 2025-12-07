@@ -23,18 +23,25 @@ interface ParticleEffectProps {
   count?: number
 }
 
-export function ParticleEffect({ trigger, x, y, type = 'sparkle', count = 20 }: ParticleEffectProps) {
+export function ParticleEffect({
+  trigger,
+  x,
+  y,
+  type = 'sparkle',
+  count = 24,
+}: ParticleEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
 
   useEffect(() => {
     if (trigger === 0) return
 
-    const colors = type === 'confetti'
-      ? ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F']
-      : type === 'stars'
-      ? ['#FFD700', '#FFA500', '#FFE4B5', '#FFFF00']
-      : ['#FFFFFF', '#E3F2FD', '#BBDEFB', '#90CAF9']
+    const colors =
+      type === 'confetti'
+        ? ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F']
+        : type === 'stars'
+        ? ['#FFD700', '#FFA500', '#FFE4B5', '#FFFF00']
+        : ['#FFFFFF', '#E3F2FD', '#BBDEFB', '#90CAF9']
 
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5)
@@ -50,7 +57,7 @@ export function ParticleEffect({ trigger, x, y, type = 'sparkle', count = 20 }: 
         maxLife: Math.random() * 60 + 40,
         color: colors[Math.floor(Math.random() * colors.length)],
         rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.2
+        rotationSpeed: (Math.random() - 0.5) * 0.2,
       })
     }
   }, [trigger, x, y, type, count])
@@ -73,57 +80,54 @@ export function ParticleEffect({ trigger, x, y, type = 'sparkle', count = 20 }: 
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      particlesRef.current = particlesRef.current.filter(particle => {
-        particle.x += particle.vx
-        particle.y += particle.vy
-        particle.vy += 0.2
-        particle.vx *= 0.99
-        particle.life--
-        particle.rotation += particle.rotationSpeed
+      particlesRef.current = particlesRef.current.filter(p => {
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += 0.2
+        p.vx *= 0.99
+        p.life--
+        p.rotation += p.rotationSpeed
 
-        if (particle.life <= 0) return false
+        if (p.life <= 0) return false
 
-        const alpha = particle.life / particle.maxLife
-
+        const alpha = p.life / p.maxLife
         ctx.save()
-        ctx.translate(particle.x, particle.y)
-        ctx.rotate(particle.rotation)
+        ctx.translate(p.x, p.y)
+        ctx.rotate(p.rotation)
         ctx.globalAlpha = alpha
 
         if (type === 'sparkle') {
-          ctx.fillStyle = particle.color
+          ctx.fillStyle = p.color
           ctx.beginPath()
-          ctx.arc(0, 0, particle.size, 0, Math.PI * 2)
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2)
           ctx.fill()
-
           ctx.fillStyle = '#FFFFFF'
           ctx.beginPath()
-          ctx.arc(0, 0, particle.size * 0.5, 0, Math.PI * 2)
+          ctx.arc(0, 0, p.size * 0.5, 0, Math.PI * 2)
           ctx.fill()
         } else if (type === 'stars') {
-          ctx.fillStyle = particle.color
+          ctx.fillStyle = p.color
           ctx.beginPath()
           for (let i = 0; i < 5; i++) {
             const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2
-            const x = Math.cos(angle) * particle.size
-            const y = Math.sin(angle) * particle.size
+            const x = Math.cos(angle) * p.size
+            const y = Math.sin(angle) * p.size
             if (i === 0) ctx.moveTo(x, y)
             else ctx.lineTo(x, y)
 
             const innerAngle = angle + Math.PI / 5
-            const innerX = Math.cos(innerAngle) * particle.size * 0.5
-            const innerY = Math.sin(innerAngle) * particle.size * 0.5
+            const innerX = Math.cos(innerAngle) * p.size * 0.5
+            const innerY = Math.sin(innerAngle) * p.size * 0.5
             ctx.lineTo(innerX, innerY)
           }
           ctx.closePath()
           ctx.fill()
         } else {
-          ctx.fillStyle = particle.color
-          ctx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size)
+          ctx.fillStyle = p.color
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size)
         }
 
         ctx.restore()
-
         return true
       })
 
@@ -140,7 +144,7 @@ export function ParticleEffect({ trigger, x, y, type = 'sparkle', count = 20 }: 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-40"
+      className="fixed inset-0 pointer-events-none z-30"
     />
   )
 }

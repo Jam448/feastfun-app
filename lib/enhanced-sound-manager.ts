@@ -1,3 +1,4 @@
+// lib/enhanced-sound-manager.ts
 export type SoundEffect =
   | 'match' | 'special' | 'combo' | 'levelComplete' | 'levelFailed'
   | 'click' | 'unlock' | 'bell' | 'whoosh' | 'sparkle'
@@ -9,32 +10,67 @@ class EnhancedSoundManager {
   private sounds: Map<SoundEffect, AudioBuffer> = new Map()
   private musicTracks: Map<MusicTrack, HTMLAudioElement> = new Map()
   private currentMusic: HTMLAudioElement | null = null
-  private soundEnabled: boolean = true
-  private musicEnabled: boolean = true
-  private musicVolume: number = 0.3
-  private sfxVolume: number = 0.5
+  private soundEnabled = true
+  private musicEnabled = true
+  private musicVolume = 0.3
+  private sfxVolume = 0.5
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.initialize()
       this.loadSettings()
+      this.setupMusic()
     }
   }
 
   private initialize() {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      this.audioContext =
+        new (window.AudioContext || (window as any).webkitAudioContext)()
       this.generateSounds()
     } catch (error) {
       console.warn('Web Audio API not supported:', error)
     }
   }
 
+  private setupMusic() {
+    // EXPECTED FILES (put MP3s here):
+    // /public/audio/jingle-bells.mp3
+    // /public/audio/silent-night.mp3
+    // /public/audio/deck-the-halls.mp3
+    const safeCreate = (path: string) => {
+      try {
+        const el = new Audio(path)
+        el.loop = true
+        el.volume = this.musicVolume
+        return el
+      } catch {
+        return null
+      }
+    }
+
+    const jb = safeCreate('/audio/jingle-bells.mp3')
+    const sn = safeCreate('/audio/silent-night.mp3')
+    const dth = safeCreate('/audio/deck-the-halls.mp3')
+
+    if (jb) this.musicTracks.set('jingleBells', jb)
+    if (sn) this.musicTracks.set('silentNight', sn)
+    if (dth) this.musicTracks.set('deckTheHalls', dth)
+  }
+
   private loadSettings() {
-    const soundEnabled = localStorage.getItem('soundEnabled')
-    const musicEnabled = localStorage.getItem('musicEnabled')
-    const musicVolume = localStorage.getItem('musicVolume')
-    const sfxVolume = localStorage.getItem('sfxVolume')
+    const soundEnabled = typeof window !== 'undefined'
+      ? window.localStorage.getItem('soundEnabled')
+      : null
+    const musicEnabled = typeof window !== 'undefined'
+      ? window.localStorage.getItem('musicEnabled')
+      : null
+    const musicVolume = typeof window !== 'undefined'
+      ? window.localStorage.getItem('musicVolume')
+      : null
+    const sfxVolume = typeof window !== 'undefined'
+      ? window.localStorage.getItem('sfxVolume')
+      : null
 
     if (soundEnabled !== null) this.soundEnabled = soundEnabled === 'true'
     if (musicEnabled !== null) this.musicEnabled = musicEnabled === 'true'
@@ -43,10 +79,11 @@ class EnhancedSoundManager {
   }
 
   private saveSettings() {
-    localStorage.setItem('soundEnabled', String(this.soundEnabled))
-    localStorage.setItem('musicEnabled', String(this.musicEnabled))
-    localStorage.setItem('musicVolume', String(this.musicVolume))
-    localStorage.setItem('sfxVolume', String(this.sfxVolume))
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('soundEnabled', String(this.soundEnabled))
+    window.localStorage.setItem('musicEnabled', String(this.musicEnabled))
+    window.localStorage.setItem('musicVolume', String(this.musicVolume))
+    window.localStorage.setItem('sfxVolume', String(this.sfxVolume))
   }
 
   private generateSounds() {
@@ -62,11 +99,10 @@ class EnhancedSoundManager {
   }
 
   private createMatchSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.15
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
@@ -79,11 +115,10 @@ class EnhancedSoundManager {
   }
 
   private createSpecialSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.3
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
@@ -96,11 +131,10 @@ class EnhancedSoundManager {
   }
 
   private createComboSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.25
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
@@ -113,11 +147,10 @@ class EnhancedSoundManager {
   }
 
   private createClickSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.05
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
@@ -129,23 +162,20 @@ class EnhancedSoundManager {
   }
 
   private createBellSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.6
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
-
     const frequencies = [1046.5, 1318.5, 1568]
 
     for (let i = 0; i < buffer.length; i++) {
       const t = i / sampleRate
       let sample = 0
-
       frequencies.forEach((freq, index) => {
-        sample += Math.sin(2 * Math.PI * freq * t) * Math.exp(-t * (3 + index)) * 0.2
+        sample += Math.sin(2 * Math.PI * freq * t) *
+          Math.exp(-t * (3 + index)) * 0.2
       })
-
       data[i] = sample
     }
 
@@ -153,29 +183,28 @@ class EnhancedSoundManager {
   }
 
   private createWhooshSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.2
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
       const t = i / sampleRate
       const frequency = 1500 - t * 1200
       const noise = Math.random() * 2 - 1
-      data[i] = (Math.sin(2 * Math.PI * frequency * t) * 0.3 + noise * 0.1) * Math.exp(-t * 8)
+      data[i] = (Math.sin(2 * Math.PI * frequency * t) * 0.3 +
+        noise * 0.1) * Math.exp(-t * 8)
     }
 
     return buffer
   }
 
   private createSparkleSound(): AudioBuffer {
-    if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
-
+    const ctx = this.audioContext!
     const duration = 0.4
-    const sampleRate = this.audioContext.sampleRate
-    const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate)
+    const sampleRate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate)
     const data = buffer.getChannelData(0)
 
     for (let i = 0; i < buffer.length; i++) {
@@ -187,7 +216,7 @@ class EnhancedSoundManager {
     return buffer
   }
 
-  playSound(effect: SoundEffect, volume: number = 1.0) {
+  playSound(effect: SoundEffect, volume = 1.0) {
     if (!this.soundEnabled || !this.audioContext) return
 
     const buffer = this.sounds.get(effect)
@@ -201,40 +230,48 @@ class EnhancedSoundManager {
 
     source.connect(gainNode)
     gainNode.connect(this.audioContext.destination)
-
     source.start(0)
   }
 
   playBells() {
     if (!this.soundEnabled) return
-
-    const pattern = [0, 100, 200, 400, 600, 800]
+    const pattern = [0, 120, 260, 420, 650, 900]
     pattern.forEach(delay => {
-      setTimeout(() => this.playSound('bell', 0.8), delay)
+      window.setTimeout(() => this.playSound('bell', 0.9), delay)
     })
   }
 
-  playMelody(notes: number[], tempo: number = 200) {
-    if (!this.soundEnabled || !this.audioContext) return
+  playLevelComplete() {
+    this.playBells()
+    const melody = [523.25, 659.25, 783.99, 1046.5]
+    this.playMelody(melody, 150)
+  }
 
+  playMelody(notes: number[], tempo = 200) {
+    if (!this.soundEnabled || !this.audioContext) return
     notes.forEach((note, index) => {
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.playTone(note, 0.2, 0.4)
       }, index * tempo)
     })
   }
 
-  private playTone(frequency: number, duration: number, volume: number = 0.5) {
+  private playTone(frequency: number, duration: number, volume = 0.5) {
     if (!this.audioContext) return
-
     const oscillator = this.audioContext.createOscillator()
     const gainNode = this.audioContext.createGain()
 
     oscillator.type = 'sine'
     oscillator.frequency.value = frequency
 
-    gainNode.gain.setValueAtTime(this.sfxVolume * volume, this.audioContext.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
+    gainNode.gain.setValueAtTime(
+      this.sfxVolume * volume,
+      this.audioContext.currentTime
+    )
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      this.audioContext.currentTime + duration
+    )
 
     oscillator.connect(gainNode)
     gainNode.connect(this.audioContext.destination)
@@ -243,10 +280,27 @@ class EnhancedSoundManager {
     oscillator.stop(this.audioContext.currentTime + duration)
   }
 
-  playLevelComplete() {
-    this.playBells()
-    const melody = [523.25, 659.25, 783.99, 1046.50]
-    this.playMelody(melody, 150)
+  // music control
+  playMusic(track: MusicTrack) {
+    if (!this.musicEnabled) return
+    const newTrack = this.musicTracks.get(track)
+    if (!newTrack) return
+
+    if (this.currentMusic && this.currentMusic !== newTrack) {
+      this.currentMusic.pause()
+      this.currentMusic.currentTime = 0
+    }
+
+    this.currentMusic = newTrack
+    this.currentMusic.volume = this.musicVolume
+    this.currentMusic.play().catch(() => {})
+  }
+
+  stopMusic() {
+    if (this.currentMusic) {
+      this.currentMusic.pause()
+      this.currentMusic.currentTime = 0
+    }
   }
 
   setSoundEnabled(enabled: boolean) {
@@ -256,10 +310,12 @@ class EnhancedSoundManager {
 
   setMusicEnabled(enabled: boolean) {
     this.musicEnabled = enabled
-    if (!enabled && this.currentMusic) {
-      this.currentMusic.pause()
-    } else if (enabled && this.currentMusic) {
+    if (!enabled) {
+      this.stopMusic()
+    } else if (this.currentMusic) {
       this.currentMusic.play().catch(() => {})
+    } else {
+      this.playMusic('jingleBells')
     }
     this.saveSettings()
   }
@@ -277,27 +333,24 @@ class EnhancedSoundManager {
     this.saveSettings()
   }
 
-  getSoundEnabled(): boolean {
+  getSoundEnabled() {
     return this.soundEnabled
   }
 
-  getMusicEnabled(): boolean {
+  getMusicEnabled() {
     return this.musicEnabled
   }
 
-  getMusicVolume(): number {
+  getMusicVolume() {
     return this.musicVolume
   }
 
-  getSfxVolume(): number {
+  getSfxVolume() {
     return this.sfxVolume
   }
 
   stopAllSounds() {
-    if (this.currentMusic) {
-      this.currentMusic.pause()
-      this.currentMusic.currentTime = 0
-    }
+    this.stopMusic()
   }
 }
 
