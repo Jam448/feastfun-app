@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/arcade/page": "app/arcade/page.js",
+  "/challenges/page": "app/challenges/page.js",
+  "/feast/page": "app/feast/page.js",
+  "/locker/page": "app/locker/page.js",
+  "/match3/page": "app/match3/page.js",
+  "/page": "app/page.js",
+  "/play/page": "app/play/page.js",
+  "/settings/page": "app/settings/page.js"
+}
