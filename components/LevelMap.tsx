@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Star, Lock, Trophy, ChevronRight } from 'lucide-react'
-import { Bolt Database } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { LEVEL_CONFIGS, getLevelConfig } from '@/lib/level-configurations'
 import { AuthButton } from '@/components/AuthButton'
 
@@ -47,7 +47,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
       const { data: { user } } = await supabase.auth.getUser()
       setIsAuthenticated(!!user)
 
-      const { data: levelsData, error: levelsError } = await (Bolt Database as any)
+      const { data: levelsData, error: levelsError } = await (supabase as any)
         .from('levels')
         .select('*')
         .order('level_number')
@@ -57,7 +57,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
       setLevels(levelsData || [])
 
       if (user) {
-        const { data: progressData, error: progressError } = await (Bolt Database as any)
+        const { data: progressData, error: progressError } = await (supabase as any)
           .from('player_levels')
           .select('*')
           .eq('player_id', user.id)
@@ -94,7 +94,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     if (!userId) return
 
     try {
-      await (Bolt Database as any).from('player_levels').insert({
+      await (supabase as any).from('player_levels').insert({
         player_id: userId,
         level_id: levelId,
         unlocked: true,
@@ -142,7 +142,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
       if (!user) return
 
       try {
-        await (Bolt Database as any).from('player_levels').insert({
+        await (supabase as any).from('player_levels').insert({
           player_id: user.id,
           level_id: level.id,
           unlocked: true,
