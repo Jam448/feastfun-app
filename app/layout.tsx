@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { BottomNav } from '@/components/BottomNav'
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -33,11 +34,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased bg-gradient-to-br from-red-600 via-red-700 to-red-800 animate-gradient min-h-screen`}>
-        <PWAInstallPrompt />
-        <main className="pb-20 min-h-screen">
-          {children}
-        </main>
-        <BottomNav />
+        <AuthProvider>
+          <PWAInstallPrompt />
+          <main className="pb-20 min-h-screen">
+            {children}
+          </main>
+          <BottomNav />
+        </AuthProvider>
       </body>
     </html>
   )
