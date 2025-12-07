@@ -39,7 +39,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex justify-center md:justify-end">
-            <div className="relative h-64 w-64 sm:h-80 sm:w-80 animate-[float_3.2s_ease-in-out_infinite]">
+<div className="relative h-64 w-64 sm:h-80 sm:w-80 animate-bounce [animation-duration:3s]">
               <Image
                 src="/santa_pockets.png"
                 alt="Pockets"
@@ -51,12 +51,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <style jsx>{`
-          @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(-1deg); }
-            50% { transform: translateY(-10px) rotate(1deg); }
-          }
-        `}</style>
+       
       </section>
     </main>
   )
