@@ -46,8 +46,6 @@ export function AdvancedMatch3Grid({
   const [hintMessage, setHintMessage] = useState('')
   const [bigComboAnimation, setBigComboAnimation] = useState<{ size: number; type: string } | null>(null)
   const [boardShake, setBoardShake] = useState(false)
-  const [matchedCells, setMatchedCells] = useState<Set<string>>(new Set())
-  const [fallingCells, setFallingCells] = useState<Map<string, { fromRow: number; toRow: number }>>(new Map())
   
   const gridRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number; row: number; col: number } | null>(null)
@@ -132,20 +130,8 @@ export function AdvancedMatch3Grid({
     soundManager.playChomp()
     triggerHaptic('medium')
 
-    // Mark matched cells for pop animation
-    if (result.matchedPositions) {
-      const matched = new Set<string>()
-      result.matchedPositions.forEach(([r, c]: [number, number]) => {
-        matched.add(`${r}-${c}`)
-      })
-      setMatchedCells(matched)
-    }
-
     await new Promise(resolve => setTimeout(resolve, 150))
     setGrid([...engine.getGrid()])
-    
-    // Clear matched cells after animation
-    setTimeout(() => setMatchedCells(new Set()), 300)
     
     await new Promise(resolve => setTimeout(resolve, 400))
 
@@ -251,20 +237,11 @@ export function AdvancedMatch3Grid({
   const getCellTransform = (cell: Cell | null, row: number, col: number): string => {
     if (!cell) return 'scale(0)'
     
-    const isMatched = matchedCells.has(`${row}-${col}`)
     const isSelected = selectedCell?.row === row && selectedCell?.col === col
-    const falling = fallingCells.get(`${row}-${col}`)
     
     let transform = 'translate3d(0, 0, 0)'
     
-    if (falling) {
-      const fallDistance = (falling.toRow - falling.fromRow) * (CELL_SIZE + CELL_GAP)
-      transform = `translate3d(0, ${-fallDistance}px, 0)`
-    }
-    
-    if (isMatched) {
-      transform += ' scale(1.15)'
-    } else if (isSelected) {
+    if (isSelected) {
       transform += ' scale(1.1)'
     } else if (cell.isFalling || cell.isNew) {
       // New tiles animate in from top
@@ -275,7 +252,6 @@ export function AdvancedMatch3Grid({
   }
 
   const getCellStyle = (cell: Cell | null, row: number, col: number): React.CSSProperties => {
-    const isMatched = matchedCells.has(`${row}-${col}`)
     const isSelected = selectedCell?.row === row && selectedCell?.col === col
     const isAdjacent = selectedCell &&
       Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
@@ -284,9 +260,7 @@ export function AdvancedMatch3Grid({
       width: CELL_SIZE,
       height: CELL_SIZE,
       transform: getCellTransform(cell, row, col),
-      transition: isMatched 
-        ? 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s ease-out'
-        : 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
       opacity: cell?.isBeingEaten ? 0 : 1,
       zIndex: isSelected ? 10 : isAdjacent ? 5 : 1,
     }
@@ -298,8 +272,8 @@ export function AdvancedMatch3Grid({
     const isSelected = selectedCell?.row === row && selectedCell?.col === col
     const isAdjacent = selectedCell &&
       Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
-    const isMatched = matchedCells.has(`${row}-${col}`)
     const isSpecial = cell.specialType !== 'none'
+    const isBeingEaten = cell.isBeingEaten
 
     const classes = [
       'relative flex items-center justify-center',
@@ -308,6 +282,11 @@ export function AdvancedMatch3Grid({
       'border-2 select-none',
       'will-change-transform', // GPU acceleration hint
     ]
+
+    // Animation for eaten tiles
+    if (isBeingEaten) {
+      classes.push('animate-tile-pop')
+    }
 
     // Background
     if (isSpecial) {
@@ -326,11 +305,6 @@ export function AdvancedMatch3Grid({
       classes.push('ring-2 ring-green-400/70 border-green-300/70')
     } else {
       classes.push('border-white/40')
-    }
-
-    // Match animation
-    if (isMatched) {
-      classes.push('animate-tile-pop')
     }
 
     return classes.join(' ')
