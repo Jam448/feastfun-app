@@ -23,9 +23,18 @@ const triggerHaptic = (intensity: 'light' | 'medium' | 'heavy' = 'light') => {
   }
 }
 
-// Grid cell size constants
-const CELL_SIZE = 48 // Base cell size in px
-const CELL_GAP = 6   // Gap between cells
+// Grid cell size constants - responsive
+const CELL_GAP = 4   // Gap between cells
+
+// Calculate cell size based on screen width
+const getCellSize = (cols: number) => {
+  if (typeof window === 'undefined') return 40
+  const screenWidth = window.innerWidth
+  const padding = 32 // Total horizontal padding
+  const availableWidth = Math.min(screenWidth - padding, 400) // Max 400px grid width
+  const cellSize = Math.floor((availableWidth - (cols - 1) * CELL_GAP) / cols)
+  return Math.min(Math.max(cellSize, 36), 52) // Clamp between 36-52px
+}
 
 export function AdvancedMatch3Grid({
   rows = 8,
@@ -46,13 +55,24 @@ export function AdvancedMatch3Grid({
   const [hintMessage, setHintMessage] = useState('')
   const [bigComboAnimation, setBigComboAnimation] = useState<{ size: number; type: string } | null>(null)
   const [boardShake, setBoardShake] = useState(false)
+  const [cellSize, setCellSize] = useState(40)
   
   const gridRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number; row: number; col: number } | null>(null)
 
+  // Calculate responsive cell size
+  useEffect(() => {
+    const updateCellSize = () => {
+      setCellSize(getCellSize(cols))
+    }
+    updateCellSize()
+    window.addEventListener('resize', updateCellSize)
+    return () => window.removeEventListener('resize', updateCellSize)
+  }, [cols])
+
   // Calculate grid dimensions
-  const gridWidth = cols * CELL_SIZE + (cols - 1) * CELL_GAP
-  const gridHeight = rows * CELL_SIZE + (rows - 1) * CELL_GAP
+  const gridWidth = cols * cellSize + (cols - 1) * CELL_GAP
+  const gridHeight = rows * cellSize + (rows - 1) * CELL_GAP
 
   // Touch/swipe handling for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent, row: number, col: number) => {
@@ -257,8 +277,8 @@ export function AdvancedMatch3Grid({
       Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
 
     return {
-      width: CELL_SIZE,
-      height: CELL_SIZE,
+      width: cellSize,
+      height: cellSize,
       transform: getCellTransform(cell, row, col),
       transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
       opacity: cell?.isBeingEaten ? 0 : 1,
@@ -384,8 +404,8 @@ export function AdvancedMatch3Grid({
         `}
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
-          gridTemplateRows: `repeat(${rows}, ${CELL_SIZE}px)`,
+          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
           gap: CELL_GAP,
           touchAction: 'none', // Prevent scroll/pinch on game board
           width: gridWidth + 24, // Add padding

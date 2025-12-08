@@ -136,6 +136,43 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     }
   }
 
+  // Check if a specific boss level is completed
+  const isBossCompleted = (bossLevelNumber: number): boolean => {
+    if (!isAuthenticated) return false
+    const bossLevel = levels.find(l => l.level_number === bossLevelNumber)
+    if (!bossLevel) return false
+    const progress = playerProgress.get(bossLevel.id)
+    return progress?.completed || false
+  }
+
+  // Check if a world is unlocked
+  const isWorldUnlocked = (world: string): boolean => {
+    if (!isAuthenticated) return false
+    
+    switch (world) {
+      case 'Cookie Forest':
+        return true // Always unlocked for authenticated users
+      case 'Candy Mountains':
+        return isBossCompleted(10) // Requires Level 10 boss completion
+      case 'Cocoa Castle':
+        return isBossCompleted(20) // Requires Level 20 boss completion
+      default:
+        return false
+    }
+  }
+
+  // Get the required boss level for a world
+  const getRequiredBoss = (world: string): { level: number; name: string } | null => {
+    switch (world) {
+      case 'Candy Mountains':
+        return { level: 10, name: 'Cookie Forest Boss (Level 10)' }
+      case 'Cocoa Castle':
+        return { level: 20, name: 'Candy Mountains Boss (Level 20)' }
+      default:
+        return null
+    }
+  }
+
   const worlds = ['Cookie Forest', 'Candy Mountains', 'Cocoa Castle']
   const worldColors = {
     'Cookie Forest': 'from-green-600 to-emerald-700',
@@ -156,11 +193,18 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   }
 
   const filteredLevels = levels.filter((l) => l.world === selectedWorld)
+  const worldUnlocked = isWorldUnlocked(selectedWorld)
+  const requiredBoss = getRequiredBoss(selectedWorld)
 
   const canUnlock = (level: Level): boolean => {
-    if (!isAuthenticated) return level.level_number === 1
+    if (!isAuthenticated) return false
+    if (!worldUnlocked) return false
 
-    if (level.level_number === 1) return true
+    if (level.level_number === 1 || level.level_number === 11 || level.level_number === 21) {
+      // First level of each world
+      return true
+    }
+    
     const prevLevel = levels.find((l) => l.level_number === level.level_number - 1)
     if (!prevLevel) return false
     const prevProgress = playerProgress.get(prevLevel.id)
@@ -168,8 +212,13 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   }
 
   const handleLevelClick = async (level: Level) => {
+    // Must be authenticated to play any level
     if (!isAuthenticated) {
-      onLevelSelect(level)
+      return
+    }
+
+    // Must have world unlocked
+    if (!worldUnlocked) {
       return
     }
 
@@ -193,6 +242,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         })
 
         await loadLevelsAndProgress()
+        onLevelSelect(level)
       } catch (error) {
         console.error('Failed to unlock level:', error)
       }
@@ -220,22 +270,36 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           <AuthButton />
         </div>
 
+        {/* World Tabs */}
         <div className="flex gap-2 mb-5 overflow-x-auto pb-2 scrollbar-hide">
-          {worlds.map((world) => (
-            <button
-              key={world}
-              onClick={() => setSelectedWorld(world)}
-              className={`px-6 py-3 rounded-xl font-black whitespace-nowrap transition-all shadow-lg ${
-                selectedWorld === world
-                  ? 'bg-gradient-to-br from-white to-yellow-50 text-red-600 scale-105 border-2 border-yellow-300'
-                  : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border-2 border-white/20'
-              }`}
-            >
-              {world}
-            </button>
-          ))}
+          {worlds.map((world) => {
+            const unlocked = isWorldUnlocked(world)
+            const required = getRequiredBoss(world)
+            
+            return (
+              <button
+                key={world}
+                onClick={() => setSelectedWorld(world)}
+                className={`px-6 py-3 rounded-xl font-black whitespace-nowrap transition-all shadow-lg relative ${
+                  selectedWorld === world
+                    ? unlocked || world === 'Cookie Forest'
+                      ? 'bg-gradient-to-br from-white to-yellow-50 text-red-600 scale-105 border-2 border-yellow-300'
+                      : 'bg-gradient-to-br from-gray-300 to-gray-400 text-gray-600 scale-105 border-2 border-gray-400'
+                    : unlocked || world === 'Cookie Forest'
+                    ? 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border-2 border-white/20'
+                    : 'bg-black/40 text-white/50 backdrop-blur-sm border-2 border-black/20'
+                }`}
+              >
+                {(!unlocked && world !== 'Cookie Forest') && (
+                  <Lock className="w-4 h-4 inline-block mr-2" />
+                )}
+                {world}
+              </button>
+            )
+          })}
         </div>
 
+        {/* World Content */}
         <div className={`bg-gradient-to-br ${worldColors[selectedWorld as keyof typeof worldColors]} rounded-3xl p-5 shadow-2xl border-4 border-white/20 relative overflow-hidden`}>
           <div className="absolute inset-0 bg-[url('/sparkles.svg')] opacity-5 pointer-events-none" />
 
@@ -263,90 +327,123 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
             </p>
           </div>
 
-          <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-            {filteredLevels.map((level, index) => {
-              const progress = playerProgress.get(level.id)
-              const isUnlocked = !isAuthenticated || progress?.unlocked || level.level_number === 1
-              const isCompleted = progress?.completed || false
-              const stars = progress?.stars_earned || 0
-              const canBeUnlocked = canUnlock(level)
-              const isBossLevel = level.level_number % 10 === 0
+          {/* Show login required message */}
+          {!isAuthenticated && (
+            <div className="relative z-10 bg-black/40 rounded-2xl p-8 text-center backdrop-blur-sm border-2 border-white/20">
+              <Lock className="w-16 h-16 text-white/80 mx-auto mb-4" />
+              <h3 className="text-2xl font-black text-white mb-2">Sign In Required</h3>
+              <p className="text-white/80 mb-4">
+                Sign in to unlock levels and save your progress!
+              </p>
+              <AuthButton />
+            </div>
+          )}
 
-              return (
-                <button
-                  key={level.id}
-                  onClick={() => handleLevelClick(level)}
-                  disabled={!isUnlocked && !canBeUnlocked}
-                  className={`relative aspect-square rounded-2xl p-3 flex flex-col items-center justify-center transition-all ${
-                    isBossLevel ? 'col-span-2 row-span-2' : ''
-                  } ${
-                    isUnlocked
-                      ? 'bg-gradient-to-br from-white to-yellow-50 hover:scale-105 shadow-xl cursor-pointer border-4 border-white/60'
-                      : canBeUnlocked
-                      ? 'bg-gradient-to-br from-yellow-200/80 to-yellow-300/80 hover:scale-105 cursor-pointer border-4 border-yellow-400 border-dashed animate-pulse'
-                      : 'bg-black/40 cursor-not-allowed opacity-60 border-4 border-black/20'
-                  }`}
-                >
-                  {isBossLevel && isUnlocked && (
-                    <div className="absolute -top-3 -right-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full p-2 shadow-lg border-2 border-white animate-bounce">
-                      <Trophy className="w-6 h-6 text-white" />
+          {/* Show world locked message */}
+          {isAuthenticated && !worldUnlocked && requiredBoss && (
+            <div className="relative z-10 bg-black/40 rounded-2xl p-8 text-center backdrop-blur-sm border-2 border-white/20">
+              <Lock className="w-16 h-16 text-white/80 mx-auto mb-4" />
+              <h3 className="text-2xl font-black text-white mb-2">World Locked</h3>
+              <p className="text-white/80 mb-4">
+                Complete <span className="font-black text-yellow-300">{requiredBoss.name}</span> to unlock this world!
+              </p>
+              <button
+                onClick={() => setSelectedWorld(requiredBoss.level <= 10 ? 'Cookie Forest' : 'Candy Mountains')}
+                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-xl font-black hover:scale-105 transition-transform shadow-lg"
+              >
+                Go to {requiredBoss.level <= 10 ? 'Cookie Forest' : 'Candy Mountains'}
+              </button>
+            </div>
+          )}
+
+          {/* Show levels grid when authenticated and world is unlocked */}
+          {isAuthenticated && worldUnlocked && (
+            <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+              {filteredLevels.map((level, index) => {
+                const progress = playerProgress.get(level.id)
+                const isUnlocked = progress?.unlocked || canUnlock(level)
+                const isCompleted = progress?.completed || false
+                const stars = progress?.stars_earned || 0
+                const canBeUnlocked = canUnlock(level)
+                const isBossLevel = level.level_number % 10 === 0
+
+                return (
+                  <button
+                    key={level.id}
+                    onClick={() => handleLevelClick(level)}
+                    disabled={!isUnlocked && !canBeUnlocked}
+                    className={`relative aspect-square rounded-2xl p-3 flex flex-col items-center justify-center transition-all ${
+                      isBossLevel ? 'col-span-2 row-span-2' : ''
+                    } ${
+                      isUnlocked
+                        ? 'bg-gradient-to-br from-white to-yellow-50 hover:scale-105 shadow-xl cursor-pointer border-4 border-white/60'
+                        : canBeUnlocked
+                        ? 'bg-gradient-to-br from-yellow-200/80 to-yellow-300/80 hover:scale-105 cursor-pointer border-4 border-yellow-400 border-dashed animate-pulse'
+                        : 'bg-black/40 cursor-not-allowed opacity-60 border-4 border-black/20'
+                    }`}
+                  >
+                    {isBossLevel && isUnlocked && (
+                      <div className="absolute -top-3 -right-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full p-2 shadow-lg border-2 border-white animate-bounce">
+                        <Trophy className="w-6 h-6 text-white" />
+                      </div>
+                    )}
+
+                    {!isUnlocked && !canBeUnlocked && (
+                      <Lock className="w-10 h-10 text-gray-400 mb-1" />
+                    )}
+
+                    {!isUnlocked && canBeUnlocked && (
+                      <div className="absolute -top-2 -right-2 bg-gradient-to-br from-green-400 to-green-600 rounded-full p-1.5 shadow-lg border-2 border-white animate-bounce">
+                        <ChevronRight className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+
+                    <div className={`${isBossLevel ? 'text-5xl' : 'text-3xl'} font-black mb-1 ${
+                      isUnlocked ? 'text-red-600 drop-shadow-sm' : 'text-white drop-shadow-lg'
+                    }`}>
+                      {level.level_number}
                     </div>
-                  )}
 
-                  {!isUnlocked && !canBeUnlocked && (
-                    <Lock className="w-10 h-10 text-gray-400 mb-1" />
-                  )}
-
-                  {!isUnlocked && canBeUnlocked && (
-                    <div className="absolute -top-2 -right-2 bg-gradient-to-br from-green-400 to-green-600 rounded-full p-1.5 shadow-lg border-2 border-white animate-bounce">
-                      <ChevronRight className="w-5 h-5 text-white" />
+                    <div className={`text-xs font-bold text-center mb-1 leading-tight ${
+                      isUnlocked ? 'text-gray-700' : 'text-white/90'
+                    }`}>
+                      {level.name}
                     </div>
-                  )}
 
-                  <div className={`${isBossLevel ? 'text-5xl' : 'text-3xl'} font-black mb-1 ${
-                    isUnlocked ? 'text-red-600 drop-shadow-sm' : 'text-white drop-shadow-lg'
-                  }`}>
-                    {level.level_number}
-                  </div>
+                    {isUnlocked && (
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3].map((star) => (
+                          <Star
+                            key={star}
+                            className={`w-5 h-5 ${
+                              star <= stars
+                                ? 'text-yellow-400 fill-yellow-400 drop-shadow-md'
+                                : 'text-gray-300 fill-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
 
-                  <div className={`text-xs font-bold text-center mb-1 leading-tight ${
-                    isUnlocked ? 'text-gray-700' : 'text-white/90'
-                  }`}>
-                    {level.name}
-                  </div>
+                    {isCompleted && (
+                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm px-3 py-1 rounded-full font-black shadow-lg border-2 border-white">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
-                  {isUnlocked && isAuthenticated && (
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3].map((star) => (
-                        <Star
-                          key={star}
-                          className={`w-5 h-5 ${
-                            star <= stars
-                              ? 'text-yellow-400 fill-yellow-400 drop-shadow-md'
-                              : 'text-gray-300 fill-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {isCompleted && (
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm px-3 py-1 rounded-full font-black shadow-lg border-2 border-white">
-                      ✓
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {filteredLevels.length === 0 && (
+          {isAuthenticated && worldUnlocked && filteredLevels.length === 0 && (
             <div className="text-center text-white text-xl py-12 font-bold">
               No levels in this world yet!
             </div>
           )}
         </div>
 
+        {/* Sign in prompt for unauthenticated users */}
         {!isAuthenticated && (
           <div className="mt-6 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-500 rounded-3xl p-6 text-center shadow-2xl border-4 border-white/40 relative overflow-hidden">
             <div className="absolute inset-0 bg-[url('/sparkles.svg')] opacity-10 pointer-events-none" />
