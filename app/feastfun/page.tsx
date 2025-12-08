@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import Image from 'next/image'
 import { AdvancedMatch3Grid } from '@/components/AdvancedMatch3Grid'
 import { Confetti } from '@/components/Confetti'
 import { getLevelConfig, TREATS, TreatType } from '@/lib/level-configurations'
 import { soundManager } from '@/lib/sound-manager'
 import { useHaptics } from '@/hooks/useHaptics'
+import { supabase } from '@/lib/supabase'
 import { Star, Trophy, Heart, Coins, Volume2, VolumeX, ArrowLeft, Target, Vibrate, VibrateOff } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -15,7 +16,7 @@ function Match3GameContent() {
   const searchParams = useSearchParams()
   const levelParam = searchParams?.get('level')
   const haptics = useHaptics()
-  
+
   const [currentLevel, setCurrentLevel] = useState(levelParam ? parseInt(levelParam) : 1)
   const [score, setScore] = useState(0)
   const [movesLeft, setMovesLeft] = useState(0)
@@ -50,15 +51,105 @@ function Match3GameContent() {
     setShowConfetti(false)
   }, [currentLevel, levelConfig])
 
-  // Trigger confetti on win
+  // Save progress when level is won
+  const saveProgress = async (finalScore: number, starsEarned: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: levelData } = await (supabase as any)
+        .from('levels')
+        .select('id')
+        .eq('level_number', currentLevel)
+        .single()
+
+      const levelId = levelData?.id || `local-${currentLevel}`
+
+      const { data: existingProgress } = await (supabase as any)
+        .from('player_levels')
+        .select('*')
+        .eq('player_id', user.id)
+        .eq('level_id', levelId)
+        .single()
+
+      if (existingProgress) {
+        await (supabase as any)
+          .from('player_levels')
+          .update({
+            completed: true,
+            stars_earned: Math.max(existingProgress.stars_earned, starsEarned),
+            best_score: Math.max(existingProgress.best_score, finalScore),
+            times_played: existingProgress.times_played + 1,
+          })
+          .eq('player_id', user.id)
+          .eq('level_id', levelId)
+      } else {
+        await (supabase as any)
+          .from('player_levels')
+          .insert({
+            player_id: user.id,
+            level_id: levelId,
+            unlocked: true,
+            completed: true,
+            stars_earned: starsEarned,
+            best_score: finalScore,
+            times_played: 1,
+          })
+      }
+
+      // Unlock next level
+      const { data: nextLevelData } = await (supabase as any)
+        .from('levels')
+        .select('id')
+        .eq('level_number', currentLevel + 1)
+        .single()
+
+      if (nextLevelData) {
+        const { data: nextProgress } = await (supabase as any)
+          .from('player_levels')
+          .select('*')
+          .eq('player_id', user.id)
+          .eq('level_id', nextLevelData.id)
+          .single()
+
+        if (!nextProgress) {
+          await (supabase as any)
+            .from('player_levels')
+            .insert({
+              player_id: user.id,
+              level_id: nextLevelData.id,
+              unlocked: true,
+              completed: false,
+              stars_earned: 0,
+              best_score: 0,
+              times_played: 0,
+            })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save progress:', error)
+    }
+  }
+
+  const getStarsEarnedValue = (): number => {
+    if (!levelConfig) return 0
+    const totalScore = score + (movesLeft * 100)
+    if (totalScore >= levelConfig.starThresholds[3]) return 3
+    if (totalScore >= levelConfig.starThresholds[2]) return 2
+    if (totalScore >= levelConfig.starThresholds[1]) return 1
+    return 0
+  }
+
   useEffect(() => {
     if (gameState === 'win') {
       setShowConfetti(true)
       haptics.onLevelComplete()
+      const totalScore = score + (movesLeft * 100) + (getStarsEarnedValue() >= 3 ? 1000 : getStarsEarnedValue() >= 2 ? 500 : 0)
+      saveProgress(totalScore, getStarsEarnedValue())
     } else if (gameState === 'lose') {
       haptics.onLevelFail()
     }
-  }, [gameState, haptics])
+  }, [gameState])
 
   const handleScoreChange = (points: number) => {
     setScore(prev => {
@@ -86,9 +177,7 @@ function Match3GameContent() {
     })
   }
 
-  const getMoveCompletionBonus = (): number => {
-    return movesLeft * 100
-  }
+  const getMoveCompletionBonus = (): number => movesLeft * 100
 
   const getStarsEarned = (): number => {
     if (!levelConfig) return 0
@@ -106,8 +195,7 @@ function Match3GameContent() {
   }
 
   const getTotalScore = (): number => {
-    const stars = getStarsEarned()
-    return score + getMoveCompletionBonus() + getStarBonus(stars)
+    return score + getMoveCompletionBonus() + getStarBonus(getStarsEarned())
   }
 
   const handleNextLevel = () => {
@@ -135,10 +223,8 @@ function Match3GameContent() {
 
   return (
     <div className="min-h-screen p-4 flex flex-col safe-top pb-24">
-      {/* Confetti on level complete */}
       <Confetti trigger={showConfetti} />
 
-      {/* Header */}
       <div className="glass rounded-2xl p-4 sm:p-5 mb-4 card-elevated">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -148,97 +234,79 @@ function Match3GameContent() {
                 router.push('/feast')
               }}
               className="text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95 p-2 -ml-2"
-              title="Back to Level Select"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div className="relative w-8 h-8 sm:w-10 sm:h-10 hidden sm:block">
-              <Image
-                src="/santa_pockets.png"
-                alt="Santa Pockets"
-                fill
-                className="object-contain drop-shadow-lg"
-              />
+              <Image src="/santa_pockets.png" alt="Pockets" fill className="object-contain drop-shadow-lg" />
             </div>
             <div className="flex items-center gap-2">
-              <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-300 drop-shadow-lg" />
-              <span className="text-white font-black text-lg sm:text-xl tracking-tight">Level {currentLevel}</span>
+              <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-300" />
+              <span className="text-white font-black text-lg sm:text-xl">Level {currentLevel}</span>
             </div>
           </div>
           <div className="flex gap-1 sm:gap-2 items-center">
-            <button
-              onClick={toggleHaptics}
-              className="text-white/80 hover:text-white transition-all p-2 hover:bg-white/10 rounded-lg active:scale-95"
-              title={haptics.isEnabled ? 'Disable haptics' : 'Enable haptics'}
-            >
+            <button onClick={toggleHaptics} className="text-white/80 hover:text-white p-2 hover:bg-white/10 rounded-lg active:scale-95">
               {haptics.isEnabled ? <Vibrate className="w-5 h-5" /> : <VibrateOff className="w-5 h-5" />}
             </button>
-            <button
-              onClick={toggleSound}
-              className="text-white/80 hover:text-white transition-all p-2 hover:bg-white/10 rounded-lg active:scale-95"
-              title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
-            >
+            <button onClick={toggleSound} className="text-white/80 hover:text-white p-2 hover:bg-white/10 rounded-lg active:scale-95">
               {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </button>
-            <div className="flex items-center gap-1 sm:gap-2 bg-gradient-to-br from-red-500/20 to-red-600/10 px-2 sm:px-3 py-1.5 rounded-full border border-red-400/30">
+            <div className="flex items-center gap-1 sm:gap-2 bg-red-500/20 px-2 sm:px-3 py-1.5 rounded-full border border-red-400/30">
               <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
               <span className="text-white font-bold text-sm sm:text-base">{lives}</span>
             </div>
-            <div className="flex items-center gap-1 sm:gap-2 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 px-2 sm:px-3 py-1.5 rounded-full border border-yellow-400/30">
+            <div className="flex items-center gap-1 sm:gap-2 bg-yellow-500/20 px-2 sm:px-3 py-1.5 rounded-full border border-yellow-400/30">
               <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-300" />
               <span className="text-white font-bold text-sm sm:text-base">{coins}</span>
             </div>
           </div>
         </div>
 
-        {/* Objective Card */}
-        <div className="bg-gradient-to-br from-white/15 to-white/5 rounded-xl p-3 sm:p-4 mb-4 border border-white/20">
+        <div className="bg-white/10 rounded-xl p-3 sm:p-4 mb-4 border border-white/20">
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-4 h-4 text-yellow-300" />
             <div className="text-white/90 text-sm font-bold">Objective</div>
           </div>
           <div className="text-white text-xs mb-2">{levelConfig.objectives[0].description}</div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <div className="text-white/70 text-xs mb-1">Score</div>
-              <div className="text-white font-black text-lg sm:text-xl">{score.toLocaleString()}</div>
+          <div className="flex gap-4">
+            <div>
+              <div className="text-white/70 text-xs">Score</div>
+              <div className="text-white font-black text-lg">{score.toLocaleString()}</div>
             </div>
-            <div className="flex-1">
-              <div className="text-white/70 text-xs mb-1">Moves</div>
-              <div className="text-white font-black text-lg sm:text-xl">{movesLeft}</div>
+            <div>
+              <div className="text-white/70 text-xs">Moves</div>
+              <div className="text-white font-black text-lg">{movesLeft}</div>
             </div>
           </div>
         </div>
 
-        {/* Star Progress */}
         <div className="flex justify-center gap-2 mb-3">
           {[1, 2, 3].map(star => (
             <Star
               key={star}
-              className={`w-7 h-7 sm:w-8 sm:h-8 transition-all duration-300 ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 transition-all ${
                 score >= (levelConfig.starThresholds as any)[star]
-                  ? 'fill-yellow-300 text-yellow-300 scale-110 drop-shadow-lg'
+                  ? 'fill-yellow-300 text-yellow-300 scale-110'
                   : 'text-white/20'
               }`}
             />
           ))}
         </div>
 
-        {/* Treats */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {levelConfig.treats.map((treatId: TreatType) => {
             const treat = TREATS[treatId]
             return (
               <div key={treatId} className="flex-shrink-0 bg-white/10 rounded-lg px-2 sm:px-3 py-2 border border-white/20">
                 <div className="text-xl sm:text-2xl mb-1">{treat.emoji}</div>
-                <div className="text-white/70 text-xs text-center whitespace-nowrap">{treat.name.split(' ')[0]}</div>
+                <div className="text-white/70 text-xs text-center">{treat.name.split(' ')[0]}</div>
               </div>
             )
           })}
         </div>
       </div>
 
-      {/* Game Area */}
       <div className="flex-1 flex items-center justify-center">
         {gameState === 'playing' ? (
           <AdvancedMatch3Grid
@@ -250,86 +318,63 @@ function Match3GameContent() {
             isPaused={isPaused}
           />
         ) : gameState === 'win' ? (
-          <div className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center card-elevated bg-gradient-to-br from-white/5 to-transparent">
-            <div className="text-6xl sm:text-7xl mb-4 animate-bounce drop-shadow-2xl">🎉</div>
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 drop-shadow-lg">Level Complete!</h2>
-
-            <div className="bg-gradient-to-br from-white/15 to-white/5 rounded-2xl p-4 sm:p-5 mb-5 border border-white/20">
-              <div className="text-white/80 text-sm font-medium mb-1">Base Score</div>
-              <div className="text-white text-2xl sm:text-3xl font-black mb-4">{score.toLocaleString()}</div>
-
+          <div className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center card-elevated">
+            <div className="text-6xl mb-4 animate-bounce">🎉</div>
+            <h2 className="text-3xl font-black text-white mb-4">Level Complete!</h2>
+            <div className="bg-white/10 rounded-2xl p-4 mb-5 border border-white/20">
+              <div className="text-white/80 text-sm mb-1">Base Score</div>
+              <div className="text-white text-2xl font-black mb-4">{score.toLocaleString()}</div>
               {movesLeft > 0 && (
                 <>
-                  <div className="text-green-300 text-sm font-bold mb-1">
-                    {movesLeft} Moves Remaining!
-                  </div>
-                  <div className="text-green-300 text-xl sm:text-2xl font-black mb-4">
-                    +{getMoveCompletionBonus().toLocaleString()}
-                  </div>
+                  <div className="text-green-300 text-sm font-bold mb-1">{movesLeft} Moves Remaining!</div>
+                  <div className="text-green-300 text-xl font-black mb-4">+{getMoveCompletionBonus().toLocaleString()}</div>
                 </>
               )}
-
               {getStarBonus(getStarsEarned()) > 0 && (
                 <>
-                  <div className="text-yellow-300 text-sm font-bold mb-1">
-                    {getStarsEarned()} Star Bonus!
-                  </div>
-                  <div className="text-yellow-300 text-xl sm:text-2xl font-black mb-4">
-                    +{getStarBonus(getStarsEarned()).toLocaleString()}
-                  </div>
+                  <div className="text-yellow-300 text-sm font-bold mb-1">{getStarsEarned()} Star Bonus!</div>
+                  <div className="text-yellow-300 text-xl font-black mb-4">+{getStarBonus(getStarsEarned()).toLocaleString()}</div>
                 </>
               )}
-
               <div className="border-t border-white/30 pt-4">
-                <div className="text-white/80 text-sm font-medium mb-1">Total Score</div>
-                <div className="text-white text-3xl sm:text-4xl font-black drop-shadow-lg">
-                  {getTotalScore().toLocaleString()}
-                </div>
+                <div className="text-white/80 text-sm mb-1">Total Score</div>
+                <div className="text-white text-3xl font-black">{getTotalScore().toLocaleString()}</div>
               </div>
             </div>
-
-            <div className="flex justify-center gap-3 sm:gap-4 mb-6 sm:mb-8">
+            <div className="flex justify-center gap-3 mb-6">
               {[1, 2, 3].map(star => (
                 <Star
                   key={star}
-                  className={`w-12 h-12 sm:w-14 sm:h-14 ${
-                    getStarsEarned() >= star
-                      ? 'fill-yellow-300 text-yellow-300 animate-bounce drop-shadow-lg'
-                      : 'text-white/20'
-                  }`}
+                  className={`w-12 h-12 ${getStarsEarned() >= star ? 'fill-yellow-300 text-yellow-300 animate-bounce' : 'text-white/20'}`}
                   style={{ animationDelay: `${star * 100}ms` }}
                 />
               ))}
             </div>
-
             <button
               onClick={handleNextLevel}
-              className="w-full bg-gradient-to-r from-white to-white/95 text-red-600 py-3 sm:py-4 rounded-2xl font-black text-lg sm:text-xl hover:from-white/95 hover:to-white/90 active:scale-95 transition-all card-elevated shadow-xl touch-manipulation"
+              className="w-full bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
             >
               Next Level
             </button>
           </div>
         ) : (
-          <div className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center card-elevated bg-gradient-to-br from-white/5 to-transparent">
-            <div className="text-6xl sm:text-7xl mb-4 drop-shadow-2xl">😢</div>
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 drop-shadow-lg">Level Failed</h2>
+          <div className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center card-elevated">
+            <div className="text-6xl mb-4">😢</div>
+            <h2 className="text-3xl font-black text-white mb-4">Level Failed</h2>
             <div className="bg-white/10 rounded-xl p-4 mb-3">
-              <p className="text-white/80 text-lg sm:text-xl font-bold mb-1">Score: {score.toLocaleString()}</p>
-              <p className="text-white/60 text-sm">
-                Goal: {levelConfig.objectives[0].target.toLocaleString()} points
-              </p>
+              <p className="text-white/80 text-lg font-bold mb-1">Score: {score.toLocaleString()}</p>
+              <p className="text-white/60 text-sm">Goal: {levelConfig.objectives[0].target.toLocaleString()}</p>
             </div>
-
             {lives > 0 ? (
               <button
                 onClick={handleRetry}
-                className="w-full bg-gradient-to-r from-white to-white/95 text-red-600 py-3 sm:py-4 rounded-2xl font-black text-lg sm:text-xl hover:from-white/95 hover:to-white/90 active:scale-95 transition-all card-elevated shadow-xl touch-manipulation"
+                className="w-full bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
               >
                 Retry ({lives} lives left)
               </button>
             ) : (
               <div className="text-white/80 bg-white/10 rounded-xl p-4">
-                <p className="mb-2 text-lg font-bold">Out of lives!</p>
+                <p className="mb-2 font-bold">Out of lives!</p>
                 <p className="text-sm text-white/60">Lives regenerate every 30 minutes</p>
               </div>
             )}
@@ -340,7 +385,7 @@ function Match3GameContent() {
   )
 }
 
-export default function Match3Page() {
+export default function FeastFunPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
