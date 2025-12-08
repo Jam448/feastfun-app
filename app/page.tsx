@@ -32,7 +32,7 @@ export default function HomePage() {
 
             <p className="text-white/90 text-base sm:text-lg max-w-xl">
               Help <span className="font-semibold">Pockets the snack-thief raccoon</span> swipe
-              cookies, cakes, and cocoa while you climb through 3 festive worlds and 30 tasty levels.
+              cookies, cakes, and cocoa while you climb through 4 festive worlds and 40 tasty levels.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-1">
@@ -44,28 +44,28 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href="/levels"
+                href="/worlds"
                 className="flex-1 rounded-2xl bg-red-900/30 px-6 py-4 text-sm sm:text-base font-bold text-white ring-1 ring-white/20 hover:bg-red-900/40 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
               >
                 🗺️ World Map
                 <span className="rounded-full bg-yellow-300 text-red-800 px-2 py-0.5 text-xs font-black">
-                  30 Levels
+                  40 Levels
                 </span>
               </Link>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm text-white/85 pt-2">
               <div className="bg-black/20 rounded-xl px-3 py-2 backdrop-blur-sm border border-white/10">
-                <div className="font-semibold">Cookie Forest</div>
-                <div className="text-white/70">Warm lights, gingerbread combos</div>
+                <div className="font-semibold">Winter Wonderland</div>
+                <div className="text-white/70">Snowy puzzles & icy treats</div>
               </div>
               <div className="bg-black/20 rounded-xl px-3 py-2 backdrop-blur-sm border border-white/10">
-                <div className="font-semibold">Candy Mountains</div>
-                <div className="text-white/70">Rainbow chains & sugar storms</div>
+                <div className="font-semibold">Candy Cane Lane</div>
+                <div className="text-white/70">Sweet chains & sugar storms</div>
               </div>
               <div className="bg-black/20 rounded-xl px-3 py-2 backdrop-blur-sm border border-white/10">
-                <div className="font-semibold">Cocoa Castle</div>
-                <div className="text-white/70">Boss levels & golden stars</div>
+                <div className="font-semibold">Gingerbread Grove</div>
+                <div className="text-white/70">Festive challenges ahead</div>
               </div>
             </div>
           </div>
@@ -76,7 +76,7 @@ export default function HomePage() {
               <div className="absolute -inset-6 rounded-full bg-gradient-to-b from-yellow-200/60 via-red-200/20 to-transparent blur-3xl opacity-70 animate-pulse" />
               <div className="relative w-full h-full animate-float">
                 <Image
-                  src="/santa_pockets.png"
+                  src="/image copy.png"
                   alt="Pockets the Christmas Raccoon"
                   fill
                   priority
@@ -96,6 +96,45 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Quick Links Section */}
+      <section className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Link
+          href="/challenges"
+          className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
+        >
+          <div className="text-3xl mb-2">🏆</div>
+          <div className="font-bold text-white">Challenges</div>
+          <div className="text-xs text-white/80">Daily quests</div>
+        </Link>
+
+        <Link
+          href="/locker"
+          className="bg-gradient-to-br from-pink-600 to-pink-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
+        >
+          <div className="text-3xl mb-2">🛍️</div>
+          <div className="font-bold text-white">Locker</div>
+          <div className="text-xs text-white/80">Customize Pockets</div>
+        </Link>
+
+        <Link
+          href="/settings"
+          className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
+        >
+          <div className="text-3xl mb-2">⚙️</div>
+          <div className="font-bold text-white">Settings</div>
+          <div className="text-xs text-white/80">Audio & more</div>
+        </Link>
+
+        <Link
+          href="/feast"
+          className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
+        >
+          <div className="text-3xl mb-2">🎯</div>
+          <div className="font-bold text-white">Feast Fun</div>
+          <div className="text-xs text-white/80">Match-3 mode</div>
+        </Link>
       </section>
     </main>
   )
