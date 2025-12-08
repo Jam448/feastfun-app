@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AdvancedMatch3Engine, Cell, SpecialType, FOOD_EMOJIS } from '@/lib/advanced-match3-engine'
 import { soundManager } from '@/lib/sound-manager'
-import { Sparkles, Zap } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { TreatType } from '@/lib/level-configurations'
 
 interface AdvancedMatch3GridProps {
@@ -15,25 +15,11 @@ interface AdvancedMatch3GridProps {
   isPaused: boolean
 }
 
-// Haptic feedback helper
 const triggerHaptic = (intensity: 'light' | 'medium' | 'heavy' = 'light') => {
   if (typeof window !== 'undefined' && 'vibrate' in navigator) {
     const patterns = { light: 10, medium: 25, heavy: 50 }
     navigator.vibrate(patterns[intensity])
   }
-}
-
-// Grid cell size constants - responsive
-const CELL_GAP = 4   // Gap between cells
-
-// Calculate cell size based on screen width
-const getCellSize = (cols: number) => {
-  if (typeof window === 'undefined') return 40
-  const screenWidth = window.innerWidth
-  const padding = 32 // Total horizontal padding
-  const availableWidth = Math.min(screenWidth - padding, 400) // Max 400px grid width
-  const cellSize = Math.floor((availableWidth - (cols - 1) * CELL_GAP) / cols)
-  return Math.min(Math.max(cellSize, 36), 52) // Clamp between 36-52px
 }
 
 export function AdvancedMatch3Grid({
@@ -44,7 +30,15 @@ export function AdvancedMatch3Grid({
   onMoveUsed,
   isPaused,
 }: AdvancedMatch3GridProps) {
-  const [engine] = useState(() => new AdvancedMatch3Engine(rows, cols, treats))
+  const engineRef = useRef<AdvancedMatch3Engine | null>(null)
+  
+  // Initialize engine only once
+  if (!engineRef.current) {
+    engineRef.current = new AdvancedMatch3Engine(rows, cols, treats)
+  }
+  
+  const engine = engineRef.current
+  
   const [grid, setGrid] = useState<(Cell | null)[][]>(() => engine.getGrid())
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -55,26 +49,16 @@ export function AdvancedMatch3Grid({
   const [hintMessage, setHintMessage] = useState('')
   const [bigComboAnimation, setBigComboAnimation] = useState<{ size: number; type: string } | null>(null)
   const [boardShake, setBoardShake] = useState(false)
-  const [cellSize, setCellSize] = useState(40)
-  
+
   const gridRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number; row: number; col: number } | null>(null)
 
-  // Calculate responsive cell size
-  useEffect(() => {
-    const updateCellSize = () => {
-      setCellSize(getCellSize(cols))
-    }
-    updateCellSize()
-    window.addEventListener('resize', updateCellSize)
-    return () => window.removeEventListener('resize', updateCellSize)
-  }, [cols])
+  // Sync grid state from engine
+  const refreshGrid = useCallback(() => {
+    const newGrid = engine.getGrid().map(row => row.map(cell => cell ? { ...cell } : null))
+    setGrid(newGrid)
+  }, [engine])
 
-  // Calculate grid dimensions
-  const gridWidth = cols * cellSize + (cols - 1) * CELL_GAP
-  const gridHeight = rows * cellSize + (rows - 1) * CELL_GAP
-
-  // Touch/swipe handling for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent, row: number, col: number) => {
     if (isPaused || isAnimating) return
     const touch = e.touches[0]
@@ -83,40 +67,35 @@ export function AdvancedMatch3Grid({
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current || isPaused || isAnimating) return
-    
+
     const touch = e.changedTouches[0]
     const deltaX = touch.clientX - touchStartRef.current.x
     const deltaY = touch.clientY - touchStartRef.current.y
     const { row, col } = touchStartRef.current
-    
+
     const minSwipeDistance = 30
-    
+
     if (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance) {
-      // Determine swipe direction
       let targetRow = row
       let targetCol = col
-      
+
       if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        // Horizontal swipe
         targetCol = deltaX > 0 ? col + 1 : col - 1
       } else {
-        // Vertical swipe
         targetRow = deltaY > 0 ? row + 1 : row - 1
       }
-      
-      // Validate target is in bounds
+
       if (targetRow >= 0 && targetRow < rows && targetCol >= 0 && targetCol < cols) {
         handleSwap(row, col, targetRow, targetCol)
       }
     } else {
-      // Tap - use click logic
       handleCellClick(row, col)
     }
-    
+
     touchStartRef.current = null
   }, [isPaused, isAnimating, rows, cols])
 
-  const handleSwap = async (fromRow: number, fromCol: number, toRow: number, toCol: number) => {
+  const handleSwap = useCallback(async (fromRow: number, fromCol: number, toRow: number, toCol: number) => {
     if (!engine.canSwap(fromRow, fromCol, toRow, toCol)) {
       soundManager.playWhoops()
       triggerHaptic('light')
@@ -131,7 +110,8 @@ export function AdvancedMatch3Grid({
 
     setIsAnimating(true)
     setSelectedCell(null)
-    
+
+    // Execute the swap in the engine
     const result = engine.swap(fromRow, fromCol, toRow, toCol)
 
     if (!result.isValid) {
@@ -147,14 +127,14 @@ export function AdvancedMatch3Grid({
       return
     }
 
+    // Play sound and haptic
     soundManager.playChomp()
     triggerHaptic('medium')
 
-    await new Promise(resolve => setTimeout(resolve, 150))
-    setGrid([...engine.getGrid()])
-    
-    await new Promise(resolve => setTimeout(resolve, 400))
+    // Immediately refresh grid to show the result after engine processed everything
+    refreshGrid()
 
+    // Show score
     if (result.score > 0) {
       onScoreChange(result.score)
       setLastScore(result.score)
@@ -162,7 +142,7 @@ export function AdvancedMatch3Grid({
       setTimeout(() => setShowScorePopup(false), 1000)
     }
 
-    // Big combo effects
+    // Big combo animation
     if (result.matchInfo && result.matchInfo.largestMatch >= 4) {
       const matchType = result.matchInfo.largestMatch >= 7 ? 'MEGA' :
                        result.matchInfo.largestMatch >= 5 ? 'SUPER' : 'BIG'
@@ -175,6 +155,7 @@ export function AdvancedMatch3Grid({
       }, 1500)
     }
 
+    // Handle cascade/combo display
     if (result.cascade) {
       const newCombo = comboCount + 1
       setComboCount(newCombo)
@@ -190,26 +171,28 @@ export function AdvancedMatch3Grid({
 
     onMoveUsed()
 
-    await new Promise(resolve => setTimeout(resolve, 300))
-    setGrid([...engine.getGrid()])
-    setIsAnimating(false)
-  }
+    // Small delay then unlock interaction
+    setTimeout(() => {
+      setIsAnimating(false)
+    }, 300)
+    
+  }, [engine, refreshGrid, onScoreChange, onMoveUsed, comboCount])
 
-  const handleCellClick = async (row: number, col: number) => {
+  const handleCellClick = useCallback(async (row: number, col: number) => {
     if (isPaused || isAnimating) return
 
     const cell = engine.getCell(row, col)
     if (!cell) return
 
-    // Special tile activation
+    // Handle special candy activation
     if (cell.specialType !== 'none') {
       setIsAnimating(true)
       triggerHaptic('heavy')
+      
       const result = engine.activateSpecial(row, col)
-
-      await new Promise(resolve => setTimeout(resolve, 300))
-      setGrid([...engine.getGrid()])
-      await new Promise(resolve => setTimeout(resolve, 600))
+      
+      // Immediately refresh grid
+      refreshGrid()
 
       if (result.score > 0) {
         onScoreChange(result.score)
@@ -220,12 +203,13 @@ export function AdvancedMatch3Grid({
 
       onMoveUsed()
 
-      await new Promise(resolve => setTimeout(resolve, 400))
-      setIsAnimating(false)
+      setTimeout(() => {
+        setIsAnimating(false)
+      }, 300)
       return
     }
 
-    // Selection logic
+    // Handle normal selection
     if (!selectedCell) {
       soundManager.playClick()
       triggerHaptic('light')
@@ -239,9 +223,9 @@ export function AdvancedMatch3Grid({
       return
     }
 
-    // Attempt swap
+    // Try to swap
     await handleSwap(selectedCell.row, selectedCell.col, row, col)
-  }
+  }, [isPaused, isAnimating, engine, selectedCell, refreshGrid, onScoreChange, onMoveUsed, handleSwap])
 
   const getSpecialIndicator = (specialType: SpecialType) => {
     switch (specialType) {
@@ -254,38 +238,6 @@ export function AdvancedMatch3Grid({
     }
   }
 
-  const getCellTransform = (cell: Cell | null, row: number, col: number): string => {
-    if (!cell) return 'scale(0)'
-    
-    const isSelected = selectedCell?.row === row && selectedCell?.col === col
-    
-    let transform = 'translate3d(0, 0, 0)'
-    
-    if (isSelected) {
-      transform += ' scale(1.1)'
-    } else if (cell.isFalling || cell.isNew) {
-      // New tiles animate in from top
-      transform = 'translate3d(0, -100px, 0) scale(0.8)'
-    }
-    
-    return transform
-  }
-
-  const getCellStyle = (cell: Cell | null, row: number, col: number): React.CSSProperties => {
-    const isSelected = selectedCell?.row === row && selectedCell?.col === col
-    const isAdjacent = selectedCell &&
-      Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
-
-    return {
-      width: cellSize,
-      height: cellSize,
-      transform: getCellTransform(cell, row, col),
-      transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-      opacity: cell?.isBeingEaten ? 0 : 1,
-      zIndex: isSelected ? 10 : isAdjacent ? 5 : 1,
-    }
-  }
-
   const getCellClassName = (cell: Cell | null, row: number, col: number) => {
     if (!cell) return 'opacity-0'
 
@@ -293,34 +245,25 @@ export function AdvancedMatch3Grid({
     const isAdjacent = selectedCell &&
       Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
     const isSpecial = cell.specialType !== 'none'
-    const isBeingEaten = cell.isBeingEaten
 
     const classes = [
       'relative flex items-center justify-center',
-      'text-3xl sm:text-4xl',
+      'text-2xl sm:text-3xl',
       'rounded-xl cursor-pointer',
       'border-2 select-none',
-      'will-change-transform', // GPU acceleration hint
+      'transition-all duration-150 ease-out',
     ]
 
-    // Animation for eaten tiles
-    if (isBeingEaten) {
-      classes.push('animate-tile-pop')
-    }
-
-    // Background
     if (isSpecial) {
       classes.push('bg-gradient-to-br from-yellow-300 via-yellow-100 to-white')
       classes.push('shadow-lg shadow-yellow-400/30')
-      classes.push('animate-glow-pulse')
     } else {
       classes.push('bg-gradient-to-br from-white to-gray-50')
       classes.push('shadow-md')
     }
 
-    // Selection states
     if (isSelected) {
-      classes.push('ring-4 ring-yellow-400 ring-offset-2 border-yellow-300')
+      classes.push('ring-4 ring-yellow-400 ring-offset-2 border-yellow-300 scale-110 z-10')
     } else if (isAdjacent) {
       classes.push('ring-2 ring-green-400/70 border-green-300/70')
     } else {
@@ -331,16 +274,16 @@ export function AdvancedMatch3Grid({
   }
 
   return (
-    <div className="relative select-none" ref={gridRef}>
+    <div className="relative select-none w-full max-w-md mx-auto" ref={gridRef}>
       {/* Big Combo Overlay */}
       {bigComboAnimation && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-          <div className="bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 text-white px-10 py-6 rounded-3xl font-black text-4xl animate-combo-pop shadow-2xl border-4 border-yellow-300">
+          <div className="bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 text-white px-8 py-5 rounded-3xl font-black text-3xl animate-bounce shadow-2xl border-4 border-yellow-300">
             <div className="text-center">
-              <div className="text-5xl mb-2">✨</div>
-              <div className="text-2xl">{bigComboAnimation.type} COMBO!</div>
-              <div className="text-6xl my-2">{bigComboAnimation.size}</div>
-              <div className="text-xl">PIECE MATCH!</div>
+              <div className="text-4xl mb-2">✨</div>
+              <div className="text-xl">{bigComboAnimation.type} COMBO!</div>
+              <div className="text-5xl my-2">{bigComboAnimation.size}</div>
+              <div className="text-lg">PIECE MATCH!</div>
             </div>
           </div>
         </div>
@@ -349,13 +292,13 @@ export function AdvancedMatch3Grid({
       {/* Score Popup */}
       {showScorePopup && !bigComboAnimation && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-          <div className="bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 text-white px-6 py-3 rounded-2xl font-black text-3xl animate-score-pop shadow-2xl border-4 border-white/50">
+          <div className="bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 text-white px-5 py-3 rounded-2xl font-black text-2xl animate-bounce shadow-2xl border-4 border-white/50">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-6 h-6" />
+              <Sparkles className="w-5 h-5" />
               +{lastScore}
             </div>
             {comboCount > 0 && (
-              <div className="text-lg font-bold mt-1">
+              <div className="text-base font-bold mt-1">
                 🔥 COMBO x{comboCount + 1}!
               </div>
             )}
@@ -363,12 +306,12 @@ export function AdvancedMatch3Grid({
         </div>
       )}
 
-      {/* Hint Message */}
+      {/* Hint/Error Message */}
       {hintMessage && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-          <div className={`px-6 py-3 rounded-2xl font-bold text-lg shadow-2xl border-4 ${
+          <div className={`px-5 py-3 rounded-2xl font-bold text-base shadow-2xl border-4 ${
             invalidMove
-              ? 'bg-gradient-to-br from-red-500 to-red-600 text-white animate-shake border-red-300'
+              ? 'bg-gradient-to-br from-red-500 to-red-600 text-white border-red-300'
               : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-300'
           }`}>
             {invalidMove ? '❌' : '💡'} {hintMessage}
@@ -378,46 +321,37 @@ export function AdvancedMatch3Grid({
 
       {/* Instructions */}
       {!selectedCell && !isAnimating && (
-        <div className="absolute -top-2 left-0 right-0 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 text-white px-3 py-2 rounded-xl text-center text-sm font-bold shadow-lg border-2 border-blue-300 z-20">
-          <div className="flex items-center justify-center gap-2">
-            🎯 <span>Tap or swipe candies to match!</span>
-          </div>
+        <div className="bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 text-white px-3 py-2 rounded-xl text-center text-sm font-bold shadow-lg border-2 border-blue-300 mb-3">
+          🎯 Tap or swipe candies to match!
         </div>
       )}
 
       {selectedCell && !isAnimating && (
-        <div className="absolute -top-2 left-0 right-0 bg-gradient-to-r from-green-500 via-green-600 to-green-500 text-white px-3 py-2 rounded-xl text-center text-sm font-bold shadow-lg border-2 border-green-300 z-20 animate-pulse">
-          <div className="flex items-center justify-center gap-2">
-            ✨ <span>Now tap adjacent candy to swap!</span>
-          </div>
+        <div className="bg-gradient-to-r from-green-500 via-green-600 to-green-500 text-white px-3 py-2 rounded-xl text-center text-sm font-bold shadow-lg border-2 border-green-300 mb-3 animate-pulse">
+          ✨ Now tap adjacent candy to swap!
         </div>
       )}
 
       {/* Game Grid */}
       <div
         className={`
-          grid place-items-center p-3 sm:p-4 
-          bg-gradient-to-br from-white/20 to-white/10 
-          rounded-2xl backdrop-blur-md shadow-xl 
-          border-2 border-white/30 mt-12
-          ${boardShake ? 'animate-board-shake' : ''}
+          grid gap-1 p-3
+          bg-gradient-to-br from-white/20 to-white/10
+          rounded-2xl backdrop-blur-md shadow-xl
+          border-2 border-white/30
+          ${boardShake ? 'animate-pulse' : ''}
         `}
         style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-          gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
-          gap: CELL_GAP,
-          touchAction: 'none', // Prevent scroll/pinch on game board
-          width: gridWidth + 24, // Add padding
-          height: gridHeight + 24 + 48, // Add padding + instruction bar space
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          touchAction: 'none',
         }}
       >
         {grid.map((row, rowIndex) =>
           row.map((cell, colIndex) => (
             <div
-              key={cell?.id || `${rowIndex}-${colIndex}`}
+              key={`${rowIndex}-${colIndex}-${cell?.id || 'empty'}`}
               className={getCellClassName(cell, rowIndex, colIndex)}
-              style={getCellStyle(cell, rowIndex, colIndex)}
+              style={{ aspectRatio: '1' }}
               onClick={() => handleCellClick(rowIndex, colIndex)}
               onTouchStart={(e) => handleTouchStart(e, rowIndex, colIndex)}
               onTouchEnd={handleTouchEnd}
@@ -428,7 +362,7 @@ export function AdvancedMatch3Grid({
                     {FOOD_EMOJIS[cell.foodType]}
                   </span>
                   {cell.specialType !== 'none' && (
-                    <div className="absolute -top-1 -right-1 text-xs bg-gradient-to-br from-yellow-300 to-orange-400 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg border border-white pointer-events-none">
+                    <div className="absolute -top-1 -right-1 text-xs bg-gradient-to-br from-yellow-300 to-orange-400 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-lg border border-white pointer-events-none">
                       {getSpecialIndicator(cell.specialType)}
                     </div>
                   )}
@@ -440,37 +374,28 @@ export function AdvancedMatch3Grid({
       </div>
 
       {/* Match Types Legend */}
-      <div className="mt-4 bg-gradient-to-br from-white/20 to-white/10 rounded-2xl p-4 backdrop-blur-md shadow-xl border-2 border-white/30">
-        <div className="text-white space-y-2">
+      <div className="mt-3 bg-gradient-to-br from-white/20 to-white/10 rounded-2xl p-3 backdrop-blur-md shadow-xl border-2 border-white/30">
+        <div className="text-white">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-yellow-300" />
             <span className="font-bold text-sm">Match Types</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="font-bold">🟦 2x2 Box</div>
-              <div className="text-yellow-300">15pts each</div>
+          <div className="grid grid-cols-4 gap-2 text-xs">
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <div className="font-bold">🟦</div>
+              <div className="text-yellow-300">2x2</div>
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="font-bold">🔷 Diagonal</div>
-              <div className="text-yellow-300">20pts each</div>
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <div className="font-bold">🔷</div>
+              <div className="text-yellow-300">Diagonal</div>
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="font-bold">➖ Row/Col</div>
-              <div className="text-yellow-300">10pts each</div>
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <div className="font-bold">➖</div>
+              <div className="text-yellow-300">Line</div>
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="font-bold">🔥 Combos</div>
-              <div className="text-orange-300">Score x1.5+</div>
-            </div>
-          </div>
-          <div className="pt-2 border-t border-white/20">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="w-3 h-3 text-yellow-300" />
-              <div className="font-semibold text-xs">Special Candies</div>
-            </div>
-            <div className="text-xs bg-white/10 rounded-lg p-2">
-              ═ Striped • ✨ Wrapped • 💥 Color Bomb
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <div className="font-bold">🔥</div>
+              <div className="text-orange-300">Combo</div>
             </div>
           </div>
         </div>

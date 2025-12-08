@@ -1,268 +1,111 @@
+'use client'
+
 class SoundManager {
-  private audioContext: AudioContext | null = null
+  private sounds: Map<string, HTMLAudioElement> = new Map()
   private enabled: boolean = true
-  private volume: number = 0.3
   private initialized: boolean = false
 
   constructor() {
     if (typeof window !== 'undefined') {
+      this.init()
+    }
+  }
+
+  private init() {
+    if (this.initialized) return
+    this.initialized = true
+
+    // Preload audio files
+    const audioFiles = {
+      chomp: '/audio/chomp.mp3',
+      match: '/audio/match.mp3',
+      combo: '/audio/combo.mp3',
+      win: '/audio/win.mp3',
+      fail: '/audio/fail.mp3',
+    }
+
+    for (const [name, path] of Object.entries(audioFiles)) {
       try {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      } catch (e) {
-        console.warn('Web Audio API not supported')
+        const audio = new Audio(path)
+        audio.preload = 'auto'
+        audio.volume = 0.5
+        this.sounds.set(name, audio)
+      } catch (error) {
+        console.warn(`Failed to load sound: ${name}`, error)
       }
     }
   }
 
-  async initialize() {
-    if (this.initialized || !this.audioContext) return
+  private play(name: string, volume: number = 0.5) {
+    if (!this.enabled) return
 
-    if (this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume()
-        this.initialized = true
-        console.log('Audio initialized')
-      } catch (e) {
-        console.warn('Failed to initialize audio:', e)
+    try {
+      const sound = this.sounds.get(name)
+      if (sound) {
+        // Clone for overlapping sounds
+        const clone = sound.cloneNode() as HTMLAudioElement
+        clone.volume = Math.min(1, Math.max(0, volume))
+        clone.play().catch(() => {
+          // Ignore autoplay errors
+        })
       }
-    } else {
-      this.initialized = true
+    } catch (error) {
+      // Silently fail
     }
   }
 
   setEnabled(enabled: boolean) {
     this.enabled = enabled
-    if (enabled && !this.initialized) {
-      this.initialize()
-    }
   }
 
-  getEnabled(): boolean {
+  isEnabled(): boolean {
     return this.enabled
   }
 
-  setVolume(volume: number) {
-    this.volume = Math.max(0, Math.min(1, volume))
-  }
-
-  private async playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume?: number) {
-    if (!this.enabled || !this.audioContext) return
-
-    await this.initialize()
-    if (!this.initialized) return
-
-    const oscillator = this.audioContext.createOscillator()
-    const gainNode = this.audioContext.createGain()
-
-    oscillator.connect(gainNode)
-    gainNode.connect(this.audioContext.destination)
-
-    oscillator.frequency.value = frequency
-    oscillator.type = type
-
-    const finalVolume = (volume ?? this.volume) * 0.5
-    gainNode.gain.setValueAtTime(finalVolume, this.audioContext.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration)
-
-    oscillator.start(this.audioContext.currentTime)
-    oscillator.stop(this.audioContext.currentTime + duration)
-  }
-
-  async playMatch() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const now = this.audioContext.currentTime
-    const oscillator = this.audioContext.createOscillator()
-    const gainNode = this.audioContext.createGain()
-
-    oscillator.connect(gainNode)
-    gainNode.connect(this.audioContext.destination)
-
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(400, now)
-    oscillator.frequency.exponentialRampToValueAtTime(600, now + 0.1)
-
-    gainNode.gain.setValueAtTime(this.volume * 0.3, now)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
-
-    oscillator.start(now)
-    oscillator.stop(now + 0.15)
-  }
-
-  async playChomp() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const now = this.audioContext.currentTime
-
-    for (let i = 0; i < 3; i++) {
-      const oscillator = this.audioContext.createOscillator()
-      const gainNode = this.audioContext.createGain()
-      const filter = this.audioContext.createBiquadFilter()
-
-      oscillator.connect(filter)
-      filter.connect(gainNode)
-      gainNode.connect(this.audioContext.destination)
-
-      oscillator.type = 'square'
-      filter.type = 'lowpass'
-      filter.frequency.value = 800
-
-      const startTime = now + (i * 0.08)
-      oscillator.frequency.setValueAtTime(200 - i * 30, startTime)
-      oscillator.frequency.exponentialRampToValueAtTime(100, startTime + 0.06)
-
-      gainNode.gain.setValueAtTime(this.volume * 0.4, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.06)
-
-      oscillator.start(startTime)
-      oscillator.stop(startTime + 0.06)
-    }
-  }
-
-  async playWhoops() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const now = this.audioContext.currentTime
-    const oscillator = this.audioContext.createOscillator()
-    const gainNode = this.audioContext.createGain()
-
-    oscillator.connect(gainNode)
-    gainNode.connect(this.audioContext.destination)
-
-    oscillator.type = 'sawtooth'
-    oscillator.frequency.setValueAtTime(300, now)
-    oscillator.frequency.exponentialRampToValueAtTime(150, now + 0.2)
-
-    gainNode.gain.setValueAtTime(this.volume * 0.3, now)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2)
-
-    oscillator.start(now)
-    oscillator.stop(now + 0.2)
-  }
-
-  async playCombo(comboLevel: number) {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const baseFreq = 400 + (comboLevel * 100)
-    const now = this.audioContext.currentTime
-
-    for (let i = 0; i < comboLevel; i++) {
-      const oscillator = this.audioContext.createOscillator()
-      const gainNode = this.audioContext.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(this.audioContext.destination)
-
-      oscillator.type = 'sine'
-      const startTime = now + (i * 0.05)
-      oscillator.frequency.setValueAtTime(baseFreq + (i * 50), startTime)
-
-      gainNode.gain.setValueAtTime(this.volume * 0.25, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.1)
-
-      oscillator.start(startTime)
-      oscillator.stop(startTime + 0.1)
-    }
-  }
-
-  async playSuccess() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const now = this.audioContext.currentTime
-    const frequencies = [523.25, 659.25, 783.99, 1046.50]
-
-    frequencies.forEach((freq, i) => {
-      const oscillator = this.audioContext!.createOscillator()
-      const gainNode = this.audioContext!.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(this.audioContext!.destination)
-
-      oscillator.type = 'sine'
-      const startTime = now + (i * 0.1)
-      oscillator.frequency.value = freq
-
-      gainNode.gain.setValueAtTime(this.volume * 0.3, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2)
-
-      oscillator.start(startTime)
-      oscillator.stop(startTime + 0.2)
-    })
-  }
-
+  // Game sounds
   playClick() {
-    this.playTone(600, 0.05, 'sine', this.volume * 0.2)
+    this.play('match', 0.3)
   }
 
-  async playMunch() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
-
-    const now = this.audioContext.currentTime
-    const oscillator = this.audioContext.createOscillator()
-    const gainNode = this.audioContext.createGain()
-    const filter = this.audioContext.createBiquadFilter()
-
-    oscillator.connect(filter)
-    filter.connect(gainNode)
-    gainNode.connect(this.audioContext.destination)
-
-    oscillator.type = 'square'
-    filter.type = 'lowpass'
-    filter.frequency.value = 1200
-
-    oscillator.frequency.setValueAtTime(350, now)
-    oscillator.frequency.exponentialRampToValueAtTime(250, now + 0.08)
-
-    gainNode.gain.setValueAtTime(this.volume * 0.35, now)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.08)
-
-    oscillator.start(now)
-    oscillator.stop(now + 0.08)
+  playChomp() {
+    this.play('chomp', 0.6)
   }
 
-  async playYuck() {
-    if (!this.enabled || !this.audioContext) return
-    await this.initialize()
-    if (!this.initialized) return
+  playMatch() {
+    this.play('match', 0.5)
+  }
 
-    const now = this.audioContext.currentTime
+  playCombo(level: number = 1) {
+    // Play combo with increasing volume based on combo level
+    const volume = Math.min(0.8, 0.4 + (level * 0.1))
+    this.play('combo', volume)
+  }
 
-    for (let i = 0; i < 2; i++) {
-      const oscillator = this.audioContext.createOscillator()
-      const gainNode = this.audioContext.createGain()
-      const filter = this.audioContext.createBiquadFilter()
+  playWin() {
+    this.play('win', 0.7)
+  }
 
-      oscillator.connect(filter)
-      filter.connect(gainNode)
-      gainNode.connect(this.audioContext.destination)
+  playFail() {
+    this.play('fail', 0.5)
+  }
 
-      oscillator.type = 'sawtooth'
-      filter.type = 'lowpass'
-      filter.frequency.value = 600
+  playWhoops() {
+    // Short fail sound for invalid moves
+    this.play('fail', 0.3)
+  }
 
-      const startTime = now + (i * 0.12)
-      oscillator.frequency.setValueAtTime(180 - i * 20, startTime)
-      oscillator.frequency.exponentialRampToValueAtTime(120, startTime + 0.1)
+  playSpecial() {
+    this.play('combo', 0.7)
+  }
 
-      gainNode.gain.setValueAtTime(this.volume * 0.4, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.1)
+  playLevelComplete() {
+    this.play('win', 0.8)
+  }
 
-      oscillator.start(startTime)
-      oscillator.stop(startTime + 0.1)
-    }
+  playLevelFail() {
+    this.play('fail', 0.6)
   }
 }
 
+// Singleton instance
 export const soundManager = new SoundManager()
