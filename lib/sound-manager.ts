@@ -98,6 +98,11 @@ class SoundManager {
     this.play('fail', 0.3)
   }
 
+  playYuck() {
+    // Sound for hitting bad items
+    this.play('fail', 0.4)
+  }
+
   playSpecial() {
     this.play('combo', 0.7)
   }
