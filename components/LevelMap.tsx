@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Star, Lock, Trophy, ChevronRight } from 'lucide-react'
+import { Star, Lock, Trophy, ChevronRight, Home } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { LEVEL_CONFIGS, getLevelConfig } from '@/lib/level-configurations'
+import { LEVEL_CONFIGS } from '@/lib/level-configurations'
 import { AuthButton } from '@/components/AuthButton'
+import Link from 'next/link'
 
 interface Level {
   id: string
@@ -67,7 +68,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         }))
         setLevels(fallbackLevels)
       } else if (!levelsData || levelsData.length === 0) {
-        console.log('No levels in database, using local configs as fallback')
         const fallbackLevels = LEVEL_CONFIGS.map(config => ({
           id: `local-${config.levelNumber}`,
           level_number: config.levelNumber,
@@ -136,7 +136,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     }
   }
 
-  // Check if a specific boss level is completed
   const isBossCompleted = (bossLevelNumber: number): boolean => {
     if (!isAuthenticated) return false
     const bossLevel = levels.find(l => l.level_number === bossLevelNumber)
@@ -145,23 +144,21 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     return progress?.completed || false
   }
 
-  // Check if a world is unlocked
   const isWorldUnlocked = (world: string): boolean => {
     if (!isAuthenticated) return false
     
     switch (world) {
       case 'Cookie Forest':
-        return true // Always unlocked for authenticated users
+        return true
       case 'Candy Mountains':
-        return isBossCompleted(10) // Requires Level 10 boss completion
+        return isBossCompleted(10)
       case 'Cocoa Castle':
-        return isBossCompleted(20) // Requires Level 20 boss completion
+        return isBossCompleted(20)
       default:
         return false
     }
   }
 
-  // Get the required boss level for a world
   const getRequiredBoss = (world: string): { level: number; name: string } | null => {
     switch (world) {
       case 'Candy Mountains':
@@ -201,7 +198,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     if (!worldUnlocked) return false
 
     if (level.level_number === 1 || level.level_number === 11 || level.level_number === 21) {
-      // First level of each world
       return true
     }
     
@@ -212,15 +208,8 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
   }
 
   const handleLevelClick = async (level: Level) => {
-    // Must be authenticated to play any level
-    if (!isAuthenticated) {
-      return
-    }
-
-    // Must have world unlocked
-    if (!worldUnlocked) {
-      return
-    }
+    if (!isAuthenticated) return
+    if (!worldUnlocked) return
 
     const progress = playerProgress.get(level.id)
 
@@ -265,8 +254,18 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
       <div className="absolute inset-0 bg-[url('/snowflakes.svg')] opacity-10 pointer-events-none" />
 
       <div className="relative z-10 max-w-4xl mx-auto p-4">
+        {/* Header with Home button */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-4xl font-black text-white drop-shadow-lg">World Map</h1>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl transition-all hover:scale-105 active:scale-95"
+              title="Back to Home"
+            >
+              <Home className="w-6 h-6" />
+            </Link>
+            <h1 className="text-3xl sm:text-4xl font-black text-white drop-shadow-lg">World Map</h1>
+          </div>
           <AuthButton />
         </div>
 
@@ -274,7 +273,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
         <div className="flex gap-2 mb-5 overflow-x-auto pb-2 scrollbar-hide">
           {worlds.map((world) => {
             const unlocked = isWorldUnlocked(world)
-            const required = getRequiredBoss(world)
             
             return (
               <button
@@ -356,10 +354,10 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
             </div>
           )}
 
-          {/* Show levels grid when authenticated and world is unlocked */}
+          {/* Show levels grid */}
           {isAuthenticated && worldUnlocked && (
             <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-              {filteredLevels.map((level, index) => {
+              {filteredLevels.map((level) => {
                 const progress = playerProgress.get(level.id)
                 const isUnlocked = progress?.unlocked || canUnlock(level)
                 const isCompleted = progress?.completed || false
@@ -443,7 +441,7 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
           )}
         </div>
 
-        {/* Sign in prompt for unauthenticated users */}
+        {/* Sign in prompt */}
         {!isAuthenticated && (
           <div className="mt-6 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-500 rounded-3xl p-6 text-center shadow-2xl border-4 border-white/40 relative overflow-hidden">
             <div className="absolute inset-0 bg-[url('/sparkles.svg')] opacity-10 pointer-events-none" />
@@ -453,11 +451,6 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
               <p className="text-white font-semibold text-base mb-4 leading-relaxed">
                 Sign in to unlock all features, save progress, earn rewards, and compete on leaderboards!
               </p>
-              <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm border border-white/30">
-                <p className="text-white/95 text-sm font-medium">
-                  🎁 Future: Connect Solana wallet for NFT rewards and exclusive items
-                </p>
-              </div>
             </div>
           </div>
         )}

@@ -35,22 +35,24 @@ export default function HomePage() {
               cookies, cakes, and cocoa while you climb through 4 festive worlds and 40 tasty levels.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            {/* Main Game Buttons */}
+            <div className="flex flex-col gap-3 pt-1">
               <Link
-                href="/play"
-                className="flex-1 rounded-2xl bg-white text-red-700 px-6 py-4 text-lg font-black shadow-candy hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
+                href="/feast"
+                className="rounded-2xl bg-white text-red-700 px-6 py-4 text-lg font-black shadow-candy hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
               >
-                🍰 Arcade Sprint
+                🗺️ FeastFun World Map
+                <span className="rounded-full bg-red-100 text-red-600 px-2 py-0.5 text-xs font-black">
+                  40 Levels
+                </span>
               </Link>
 
               <Link
-                href="/feast"
-                className="flex-1 rounded-2xl bg-red-900/30 px-6 py-4 text-sm sm:text-base font-bold text-white ring-1 ring-white/20 hover:bg-red-900/40 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
+                href="/play"
+                className="rounded-2xl bg-red-900/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-red-900/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
               >
-                🗺️ FeastFun Levels
-                <span className="rounded-full bg-yellow-300 text-red-800 px-2 py-0.5 text-xs font-black">
-                  40 Levels
-                </span>
+                🎮 Arcade Sprint
+                <span className="text-white/60 text-xs">• Endless Mode</span>
               </Link>
             </div>
 
@@ -128,12 +130,12 @@ export default function HomePage() {
         </Link>
 
         <Link
-          href="/feast"
-          className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
+          href="/arcade"
+          className="bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
         >
-          <div className="text-3xl mb-2">🎯</div>
-          <div className="font-bold text-white">FeastFun</div>
-          <div className="text-xs text-white/80">Match-3 mode</div>
+          <div className="text-3xl mb-2">🕹️</div>
+          <div className="font-bold text-white">Arcade</div>
+          <div className="text-xs text-white/80">More games</div>
         </Link>
       </section>
     </main>

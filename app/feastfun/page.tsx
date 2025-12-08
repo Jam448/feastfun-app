@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useEffect, Suspense, useCallback } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { AdvancedMatch3Grid } from '@/components/AdvancedMatch3Grid'
 import { Confetti } from '@/components/Confetti'
 import { getLevelConfig, TREATS, TreatType } from '@/lib/level-configurations'
 import { soundManager } from '@/lib/sound-manager'
 import { useHaptics } from '@/hooks/useHaptics'
 import { supabase } from '@/lib/supabase'
-import { Star, Trophy, Heart, Coins, Volume2, VolumeX, ArrowLeft, Target, Vibrate, VibrateOff } from 'lucide-react'
+import { Star, Trophy, Heart, Coins, Volume2, VolumeX, ArrowLeft, Target, Vibrate, VibrateOff, Home } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function Match3GameContent() {
@@ -144,10 +145,12 @@ function Match3GameContent() {
     if (gameState === 'win') {
       setShowConfetti(true)
       haptics.onLevelComplete()
+      soundManager.playWin() // Play win sound!
       const totalScore = score + (movesLeft * 100) + (getStarsEarnedValue() >= 3 ? 1000 : getStarsEarnedValue() >= 2 ? 500 : 0)
       saveProgress(totalScore, getStarsEarnedValue())
     } else if (gameState === 'lose') {
       haptics.onLevelFail()
+      soundManager.playFail() // Play fail sound!
     }
   }, [gameState])
 
@@ -228,12 +231,22 @@ function Match3GameContent() {
       <div className="glass rounded-2xl p-4 sm:p-5 mb-4 card-elevated">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Home Button */}
+            <Link
+              href="/"
+              className="text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95 p-2"
+              title="Home"
+            >
+              <Home className="w-5 h-5" />
+            </Link>
+            {/* Back to Level Select */}
             <button
               onClick={() => {
                 haptics.onTap()
                 router.push('/feast')
               }}
-              className="text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95 p-2 -ml-2"
+              className="text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95 p-2"
+              title="Back to Level Select"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
@@ -350,12 +363,20 @@ function Match3GameContent() {
                 />
               ))}
             </div>
-            <button
-              onClick={handleNextLevel}
-              className="w-full bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
-            >
-              Next Level
-            </button>
+            <div className="flex gap-3">
+              <Link
+                href="/feast"
+                className="flex-1 bg-white/20 text-white py-3 rounded-2xl font-bold text-base active:scale-95 transition-transform"
+              >
+                World Map
+              </Link>
+              <button
+                onClick={handleNextLevel}
+                className="flex-1 bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
+              >
+                Next Level
+              </button>
+            </div>
           </div>
         ) : (
           <div className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center card-elevated">
@@ -366,12 +387,20 @@ function Match3GameContent() {
               <p className="text-white/60 text-sm">Goal: {levelConfig.objectives[0].target.toLocaleString()}</p>
             </div>
             {lives > 0 ? (
-              <button
-                onClick={handleRetry}
-                className="w-full bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
-              >
-                Retry ({lives} lives left)
-              </button>
+              <div className="flex gap-3">
+                <Link
+                  href="/feast"
+                  className="flex-1 bg-white/20 text-white py-3 rounded-2xl font-bold text-base active:scale-95 transition-transform"
+                >
+                  World Map
+                </Link>
+                <button
+                  onClick={handleRetry}
+                  className="flex-1 bg-white text-red-600 py-3 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-xl"
+                >
+                  Retry ({lives} ❤️)
+                </button>
+              </div>
             ) : (
               <div className="text-white/80 bg-white/10 rounded-xl p-4">
                 <p className="mb-2 font-bold">Out of lives!</p>
