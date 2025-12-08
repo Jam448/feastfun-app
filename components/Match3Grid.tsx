@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Match3Engine, Cell, Match } from '@/lib/feastfun-engine'
+import { Match3Engine, Cell, Match } from '@/lib/match3-engine'
 import { CHRISTMAS_FOODS } from '@/lib/game-config'
 
 interface Match3GridProps {
