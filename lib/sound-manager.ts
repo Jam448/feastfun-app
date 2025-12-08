@@ -71,6 +71,10 @@ class SoundManager {
     this.play('chomp', 0.6)
   }
 
+  playMunch() {
+    this.play('chomp', 0.6)
+  }
+
   playMatch() {
     this.play('match', 0.5)
   }
