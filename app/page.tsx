@@ -44,10 +44,10 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href="/worlds"
+                href="/feast"
                 className="flex-1 rounded-2xl bg-red-900/30 px-6 py-4 text-sm sm:text-base font-bold text-white ring-1 ring-white/20 hover:bg-red-900/40 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
               >
-                🗺️ World Map
+                🗺️ FeastFun Levels
                 <span className="rounded-full bg-yellow-300 text-red-800 px-2 py-0.5 text-xs font-black">
                   40 Levels
                 </span>
@@ -76,7 +76,7 @@ export default function HomePage() {
               <div className="absolute -inset-6 rounded-full bg-gradient-to-b from-yellow-200/60 via-red-200/20 to-transparent blur-3xl opacity-70 animate-pulse" />
               <div className="relative w-full h-full animate-float">
                 <Image
-                  src="/image copy.png"
+                  src="/santa_pockets.png"
                   alt="Pockets the Christmas Raccoon"
                   fill
                   priority
@@ -132,7 +132,7 @@ export default function HomePage() {
           className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-4 shadow-candy hover:scale-105 active:scale-95 transition-transform"
         >
           <div className="text-3xl mb-2">🎯</div>
-          <div className="font-bold text-white">Feast Fun</div>
+          <div className="font-bold text-white">FeastFun</div>
           <div className="text-xs text-white/80">Match-3 mode</div>
         </Link>
       </section>

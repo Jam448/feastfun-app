@@ -31,7 +31,7 @@ export function Hero() {
             </Link>
 
             <Link
-              href="/match3"
+              href="/feastfun"
               className="rounded-2xl bg-white/15 px-5 py-3 font-bold text-white ring-1 ring-white/25 hover:bg-white/20 transition"
             >
               Feast Crush

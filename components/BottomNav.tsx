@@ -11,7 +11,7 @@ export function BottomNav() {
 
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
-    { href: '/match3', icon: Play, label: 'Feast' },
+    { href: '/feastfun', icon: Play, label: 'Feast' },
     { href: '/play', icon: Trophy, label: 'Arcade' },
     { href: '/challenges', icon: Trophy, label: 'Ranks' },
     { href: '/settings', icon: Settings, label: 'Settings' },
