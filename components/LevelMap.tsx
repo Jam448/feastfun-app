@@ -212,28 +212,39 @@ export function LevelMap({ onLevelSelect }: LevelMapProps) {
     if (!worldUnlocked) return
 
     const progress = playerProgress.get(level.id)
+    const isBossLevel = level.level_number % 10 === 0
 
-    if (progress?.unlocked) {
-      onLevelSelect(level)
-    } else if (canUnlock(level)) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    if (progress?.unlocked || canUnlock(level)) {
+      // Unlock if needed
+      if (!progress?.unlocked && canUnlock(level)) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-      try {
-        await (supabase as any).from('player_levels').insert({
-          player_id: user.id,
-          level_id: level.id,
-          unlocked: true,
-          completed: false,
-          stars_earned: 0,
-          best_score: 0,
-          times_played: 0,
-        })
+        try {
+          await (supabase as any).from('player_levels').insert({
+            player_id: user.id,
+            level_id: level.id,
+            unlocked: true,
+            completed: false,
+            stars_earned: 0,
+            best_score: 0,
+            times_played: 0,
+          })
+          await loadLevelsAndProgress()
+        } catch (error) {
+          console.error('Failed to unlock level:', error)
+        }
+      }
 
-        await loadLevelsAndProgress()
+      // Route to appropriate page
+      if (isBossLevel) {
+        // Route to boss battle
+        const bossId = level.level_number === 10 ? 'gingerbread_golem' :
+                       level.level_number === 20 ? 'queen_carmella' :
+                       level.level_number === 30 ? 'baron_von_cocoa' : 'gingerbread_golem'
+        onLevelSelect({ ...level, isBoss: true, bossId } as any)
+      } else {
         onLevelSelect(level)
-      } catch (error) {
-        console.error('Failed to unlock level:', error)
       }
     }
   }
