@@ -22,6 +22,7 @@ class SoundManager {
       combo: '/audio/combo.mp3',
       win: '/audio/win.mp3',
       fail: '/audio/fail.mp3',
+      yuck: '/audio/yuck.mp3',
     }
 
     for (const [name, path] of Object.entries(audioFiles)) {
@@ -99,8 +100,8 @@ class SoundManager {
   }
 
   playYuck() {
-    // Sound for hitting bad items
-    this.play('fail', 0.4)
+    // Sound for hitting bad items in arcade
+    this.play('yuck', 0.5)
   }
 
   playSpecial() {

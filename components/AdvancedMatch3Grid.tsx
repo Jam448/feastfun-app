@@ -15,6 +15,28 @@ interface AdvancedMatch3GridProps {
   isPaused: boolean
 }
 
+interface AnimatingCell {
+  id: string
+  fromRow: number
+  fromCol: number
+  toRow: number
+  toCol: number
+  progress: number
+  type: 'swap' | 'fall' | 'appear'
+}
+
+interface CrumbParticle {
+  id: string
+  x: number
+  y: number
+  vx: number
+  vy: number
+  emoji: string
+  scale: number
+  opacity: number
+  rotation: number
+}
+
 const triggerHaptic = (intensity: 'light' | 'medium' | 'heavy' = 'light') => {
   if (typeof window !== 'undefined' && 'vibrate' in navigator) {
     const patterns = { light: 10, medium: 25, heavy: 50 }
@@ -32,7 +54,6 @@ export function AdvancedMatch3Grid({
 }: AdvancedMatch3GridProps) {
   const engineRef = useRef<AdvancedMatch3Engine | null>(null)
   
-  // Initialize engine only once
   if (!engineRef.current) {
     engineRef.current = new AdvancedMatch3Engine(rows, cols, treats)
   }
@@ -49,11 +70,66 @@ export function AdvancedMatch3Grid({
   const [hintMessage, setHintMessage] = useState('')
   const [bigComboAnimation, setBigComboAnimation] = useState<{ size: number; type: string } | null>(null)
   const [boardShake, setBoardShake] = useState(false)
+  
+  // Animation states
+  const [swappingCells, setSwappingCells] = useState<{from: {row: number, col: number}, to: {row: number, col: number}, progress: number} | null>(null)
+  const [crumblingCells, setCrumblingCells] = useState<Set<string>>(new Set())
+  const [fallingCells, setFallingCells] = useState<Map<string, {fromRow: number, progress: number}>>(new Map())
+  const [particles, setParticles] = useState<CrumbParticle[]>([])
 
   const gridRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number; row: number; col: number } | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
 
-  // Sync grid state from engine
+  // Spawn crumb particles when cells are matched
+  const spawnCrumbs = useCallback((row: number, col: number, emoji: string) => {
+    const newParticles: CrumbParticle[] = []
+    const cellSize = gridRef.current ? gridRef.current.offsetWidth / cols : 40
+    const baseX = col * cellSize + cellSize / 2
+    const baseY = row * cellSize + cellSize / 2
+
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.5
+      const speed = 2 + Math.random() * 3
+      newParticles.push({
+        id: `${row}-${col}-${i}-${Date.now()}`,
+        x: baseX,
+        y: baseY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 2,
+        emoji,
+        scale: 0.5 + Math.random() * 0.3,
+        opacity: 1,
+        rotation: Math.random() * 360,
+      })
+    }
+    setParticles(prev => [...prev, ...newParticles])
+  }, [cols])
+
+  // Animate particles
+  useEffect(() => {
+    if (particles.length === 0) return
+
+    const animate = () => {
+      setParticles(prev => {
+        const updated = prev.map(p => ({
+          ...p,
+          x: p.x + p.vx,
+          y: p.y + p.vy,
+          vy: p.vy + 0.3, // gravity
+          opacity: p.opacity - 0.03,
+          rotation: p.rotation + 5,
+          scale: p.scale * 0.97,
+        })).filter(p => p.opacity > 0)
+        
+        return updated
+      })
+    }
+
+    const frameId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frameId)
+  }, [particles])
+
   const refreshGrid = useCallback(() => {
     const newGrid = engine.getGrid().map(row => row.map(cell => cell ? { ...cell } : null))
     setGrid(newGrid)
@@ -95,6 +171,48 @@ export function AdvancedMatch3Grid({
     touchStartRef.current = null
   }, [isPaused, isAnimating, rows, cols])
 
+  const animateSwap = async (fromRow: number, fromCol: number, toRow: number, toCol: number): Promise<void> => {
+    return new Promise((resolve) => {
+      setSwappingCells({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, progress: 0 })
+      
+      let progress = 0
+      const animate = () => {
+        progress += 0.08
+        if (progress >= 1) {
+          setSwappingCells(null)
+          resolve()
+          return
+        }
+        setSwappingCells({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, progress })
+        requestAnimationFrame(animate)
+      }
+      requestAnimationFrame(animate)
+    })
+  }
+
+  const animateCrumble = async (matchedPositions: {row: number, col: number, emoji: string}[]): Promise<void> => {
+    return new Promise((resolve) => {
+      const posSet = new Set(matchedPositions.map(p => `${p.row}-${p.col}`))
+      setCrumblingCells(posSet)
+      
+      // Spawn particles for each matched cell
+      matchedPositions.forEach(pos => {
+        spawnCrumbs(pos.row, pos.col, pos.emoji)
+      })
+
+      setTimeout(() => {
+        setCrumblingCells(new Set())
+        resolve()
+      }, 300)
+    })
+  }
+
+  const animateFall = async (): Promise<void> => {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 250)
+    })
+  }
+
   const handleSwap = useCallback(async (fromRow: number, fromCol: number, toRow: number, toCol: number) => {
     if (!engine.canSwap(fromRow, fromCol, toRow, toCol)) {
       soundManager.playWhoops()
@@ -111,10 +229,20 @@ export function AdvancedMatch3Grid({
     setIsAnimating(true)
     setSelectedCell(null)
 
+    // Get the cells before swap for animation
+    const cell1 = engine.getCell(fromRow, fromCol)
+    const cell2 = engine.getCell(toRow, toCol)
+
+    // Animate the swap visually
+    await animateSwap(fromRow, fromCol, toRow, toCol)
+
     // Execute the swap in the engine
     const result = engine.swap(fromRow, fromCol, toRow, toCol)
 
     if (!result.isValid) {
+      // Swap back animation
+      await animateSwap(toRow, toCol, fromRow, fromCol)
+      
       soundManager.playWhoops()
       triggerHaptic('light')
       setInvalidMove(true)
@@ -124,15 +252,39 @@ export function AdvancedMatch3Grid({
         setHintMessage('')
       }, 800)
       setIsAnimating(false)
+      refreshGrid()
       return
     }
 
-    // Play sound and haptic
+    // Play match sound
     soundManager.playChomp()
     triggerHaptic('medium')
 
-    // Immediately refresh grid to show the result after engine processed everything
+    // Get matched cells for crumble animation
+    const currentGrid = engine.getGrid()
+    const matchedPositions: {row: number, col: number, emoji: string}[] = []
+    
+    // Find cells that were matched (they'll be new or different)
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const oldCell = grid[r]?.[c]
+        const newCell = currentGrid[r]?.[c]
+        if (oldCell && newCell && oldCell.id !== newCell.id) {
+          matchedPositions.push({ row: r, col: c, emoji: FOOD_EMOJIS[oldCell.foodType] })
+        }
+      }
+    }
+
+    // Animate crumbling
+    if (matchedPositions.length > 0) {
+      await animateCrumble(matchedPositions)
+    }
+
+    // Update grid to show new state
     refreshGrid()
+
+    // Animate falling
+    await animateFall()
 
     // Show score
     if (result.score > 0) {
@@ -170,13 +322,9 @@ export function AdvancedMatch3Grid({
     }
 
     onMoveUsed()
-
-    // Small delay then unlock interaction
-    setTimeout(() => {
-      setIsAnimating(false)
-    }, 300)
+    setIsAnimating(false)
     
-  }, [engine, refreshGrid, onScoreChange, onMoveUsed, comboCount])
+  }, [engine, refreshGrid, onScoreChange, onMoveUsed, comboCount, grid, rows, spawnCrumbs])
 
   const handleCellClick = useCallback(async (row: number, col: number) => {
     if (isPaused || isAnimating) return
@@ -191,7 +339,6 @@ export function AdvancedMatch3Grid({
       
       const result = engine.activateSpecial(row, col)
       
-      // Immediately refresh grid
       refreshGrid()
 
       if (result.score > 0) {
@@ -238,6 +385,49 @@ export function AdvancedMatch3Grid({
     }
   }
 
+  const getCellStyle = (cell: Cell | null, row: number, col: number): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {
+      aspectRatio: '1',
+      transition: 'transform 0.15s ease-out, opacity 0.2s ease-out',
+    }
+
+    // Check if this cell is being swapped
+    if (swappingCells) {
+      const { from, to, progress } = swappingCells
+      const easeProgress = 1 - Math.pow(1 - progress, 3) // ease-out cubic
+      
+      if (row === from.row && col === from.col) {
+        const dx = (to.col - from.col) * 100 * easeProgress
+        const dy = (to.row - from.row) * 100 * easeProgress
+        return {
+          ...baseStyle,
+          transform: `translate(${dx}%, ${dy}%) scale(1.1)`,
+          zIndex: 10,
+        }
+      }
+      if (row === to.row && col === to.col) {
+        const dx = (from.col - to.col) * 100 * easeProgress
+        const dy = (from.row - to.row) * 100 * easeProgress
+        return {
+          ...baseStyle,
+          transform: `translate(${dx}%, ${dy}%) scale(1.1)`,
+          zIndex: 10,
+        }
+      }
+    }
+
+    // Check if this cell is crumbling
+    if (crumblingCells.has(`${row}-${col}`)) {
+      return {
+        ...baseStyle,
+        transform: 'scale(0) rotate(180deg)',
+        opacity: 0,
+      }
+    }
+
+    return baseStyle
+  }
+
   const getCellClassName = (cell: Cell | null, row: number, col: number) => {
     if (!cell) return 'opacity-0'
 
@@ -245,18 +435,23 @@ export function AdvancedMatch3Grid({
     const isAdjacent = selectedCell &&
       Math.abs(selectedCell.row - row) + Math.abs(selectedCell.col - col) === 1
     const isSpecial = cell.specialType !== 'none'
+    const isCrumbling = crumblingCells.has(`${row}-${col}`)
 
     const classes = [
       'relative flex items-center justify-center',
       'text-2xl sm:text-3xl',
       'rounded-xl cursor-pointer',
       'border-2 select-none',
-      'transition-all duration-150 ease-out',
     ]
+
+    if (isCrumbling) {
+      classes.push('transition-all duration-300')
+    }
 
     if (isSpecial) {
       classes.push('bg-gradient-to-br from-yellow-300 via-yellow-100 to-white')
       classes.push('shadow-lg shadow-yellow-400/30')
+      classes.push('animate-pulse')
     } else {
       classes.push('bg-gradient-to-br from-white to-gray-50')
       classes.push('shadow-md')
@@ -265,9 +460,9 @@ export function AdvancedMatch3Grid({
     if (isSelected) {
       classes.push('ring-4 ring-yellow-400 ring-offset-2 border-yellow-300 scale-110 z-10')
     } else if (isAdjacent) {
-      classes.push('ring-2 ring-green-400/70 border-green-300/70')
+      classes.push('ring-2 ring-green-400/70 border-green-300/70 scale-105')
     } else {
-      classes.push('border-white/40')
+      classes.push('border-white/40 hover:scale-105')
     }
 
     return classes.join(' ')
@@ -275,6 +470,25 @@ export function AdvancedMatch3Grid({
 
   return (
     <div className="relative select-none w-full max-w-md mx-auto" ref={gridRef}>
+      {/* Particles overlay */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
+        {particles.map(p => (
+          <div
+            key={p.id}
+            className="absolute text-lg"
+            style={{
+              left: p.x,
+              top: p.y,
+              transform: `scale(${p.scale}) rotate(${p.rotation}deg)`,
+              opacity: p.opacity,
+              transition: 'none',
+            }}
+          >
+            {p.emoji}
+          </div>
+        ))}
+      </div>
+
       {/* Big Combo Overlay */}
       {bigComboAnimation && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
@@ -351,7 +565,7 @@ export function AdvancedMatch3Grid({
             <div
               key={`${rowIndex}-${colIndex}-${cell?.id || 'empty'}`}
               className={getCellClassName(cell, rowIndex, colIndex)}
-              style={{ aspectRatio: '1' }}
+              style={getCellStyle(cell, rowIndex, colIndex)}
               onClick={() => handleCellClick(rowIndex, colIndex)}
               onTouchStart={(e) => handleTouchStart(e, rowIndex, colIndex)}
               onTouchEnd={handleTouchEnd}
