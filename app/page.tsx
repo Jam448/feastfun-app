@@ -82,7 +82,12 @@ export default function HomePage() {
                   alt="Pockets the Christmas Raccoon"
                   fill
                   priority
-                  className="object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.65)]"
+                  unoptimized
+                  className="object-contain"
+                  style={{ 
+                    filter: 'drop-shadow(0 18px 50px rgba(0,0,0,0.65))',
+                    mixBlendMode: 'normal'
+                  }}
                 />
               </div>
 

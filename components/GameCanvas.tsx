@@ -406,13 +406,13 @@ export function GameCanvas({ onGameEnd, playerColor, triggerHaptic }: GameCanvas
 
         ctx.save()
         ctx.globalAlpha = p.life
-        ctx.fillStyle = p.color
         
         if (p.type === 'star') {
-          // Draw star shape
+          // Draw star shape with fill
+          ctx.fillStyle = p.color
           ctx.beginPath()
-          for (let j = 0; j < 5; j++) {
-            const angle = (j * Math.PI * 2) / 5 - Math.PI / 2
+          for (let j = 0; j < 10; j++) {
+            const angle = (j * Math.PI * 2) / 10 - Math.PI / 2
             const r = j % 2 === 0 ? p.size : p.size / 2
             if (j === 0) ctx.moveTo(p.x + Math.cos(angle) * r, p.y + Math.sin(angle) * r)
             else ctx.lineTo(p.x + Math.cos(angle) * r, p.y + Math.sin(angle) * r)
@@ -420,6 +420,8 @@ export function GameCanvas({ onGameEnd, playerColor, triggerHaptic }: GameCanvas
           ctx.closePath()
           ctx.fill()
         } else {
+          // Draw circle particle
+          ctx.fillStyle = p.color
           ctx.beginPath()
           ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
           ctx.fill()
@@ -512,18 +514,26 @@ export function GameCanvas({ onGameEnd, playerColor, triggerHaptic }: GameCanvas
         ctx.translate(obj.x, obj.y)
         ctx.rotate(obj.rotation)
 
+        // Draw glow circle behind emoji (works better on mobile than shadowBlur)
         if (obj.type === 'golden') {
-          ctx.shadowColor = '#fbbf24'
-          ctx.shadowBlur = 20
+          ctx.beginPath()
+          ctx.arc(0, 0, obj.size * 1.5, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.3)'
+          ctx.fill()
         } else if (obj.type === 'hazard') {
-          ctx.shadowColor = '#ef4444'
-          ctx.shadowBlur = 10
+          ctx.beginPath()
+          ctx.arc(0, 0, obj.size * 1.3, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.25)'
+          ctx.fill()
         } else {
-          ctx.shadowColor = '#34d399'
-          ctx.shadowBlur = 8
+          ctx.beginPath()
+          ctx.arc(0, 0, obj.size * 1.2, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(52, 211, 153, 0.2)'
+          ctx.fill()
         }
 
-        ctx.font = `${obj.size * 2.5}px Arial`
+        // Draw emoji - use system font stack for better mobile support
+        ctx.font = `${obj.size * 2.5}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(obj.emoji, 0, 0)
