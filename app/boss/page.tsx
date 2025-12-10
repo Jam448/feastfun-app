@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GingerbreadGolemBattle } from '@/components/GingerbreadGolemBattle'
+import { QueenCarmellaBattle } from '@/components/QueenCarmellaBattle'
+import { BaronVonCocoaBattle } from '@/components/BaronVonCocoaBattle'
 import { StoryModal, BOSS_STORIES } from '@/components/StoryModal'
 import { supabase } from '@/lib/supabase'
 import { soundManager } from '@/lib/sound-manager'
@@ -30,24 +32,27 @@ function BossLevelContent() {
           victoryStory: BOSS_STORIES.gingerbread_golem_victory,
           world: 'Cookie Forest',
           nextWorld: 'Candy Mountains',
+          component: 'golem',
         }
       case 'queen_carmella':
         return {
           level: 20,
           maxTurns: 30,
           introStory: BOSS_STORIES.queen_carmella_intro,
-          victoryStory: BOSS_STORIES.queen_carmella_intro, // TODO: Add victory story
+          victoryStory: BOSS_STORIES.queen_carmella_victory,
           world: 'Candy Mountains',
           nextWorld: 'Cocoa Castle',
+          component: 'queen',
         }
       case 'baron_von_cocoa':
         return {
           level: 30,
           maxTurns: 35,
           introStory: BOSS_STORIES.baron_von_cocoa_intro,
-          victoryStory: BOSS_STORIES.baron_von_cocoa_intro, // TODO: Add victory story
+          victoryStory: BOSS_STORIES.baron_von_cocoa_victory,
           world: 'Cocoa Castle',
           nextWorld: null,
+          component: 'baron',
         }
       default:
         return {
@@ -57,6 +62,7 @@ function BossLevelContent() {
           victoryStory: BOSS_STORIES.gingerbread_golem_victory,
           world: 'Cookie Forest',
           nextWorld: 'Candy Mountains',
+          component: 'golem',
         }
     }
   }
@@ -77,7 +83,6 @@ function BossLevelContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        // Mark boss level as completed
         const { data: levelData } = await (supabase as any)
           .from('levels')
           .select('id')
@@ -85,7 +90,6 @@ function BossLevelContent() {
           .single()
 
         if (levelData) {
-          // Calculate stars based on performance
           const stars = turns >= 15 ? 3 : turns >= 8 ? 2 : 1
           
           const { data: existingProgress } = await (supabase as any)
@@ -180,8 +184,65 @@ function BossLevelContent() {
     setTurnsRemaining(0)
   }
 
+  const renderBattleComponent = () => {
+    switch (config.component) {
+      case 'golem':
+        return (
+          <GingerbreadGolemBattle
+            onVictory={handleVictory}
+            onDefeat={handleDefeat}
+            maxTurns={config.maxTurns}
+          />
+        )
+      case 'queen':
+        return (
+          <QueenCarmellaBattle
+            onVictory={handleVictory}
+            onDefeat={handleDefeat}
+            maxTurns={config.maxTurns}
+          />
+        )
+      case 'baron':
+        return (
+          <BaronVonCocoaBattle
+            onVictory={handleVictory}
+            onDefeat={handleDefeat}
+            maxTurns={config.maxTurns}
+          />
+        )
+      default:
+        return null
+    }
+  }
+
+  const getBackgroundGradient = () => {
+    switch (config.component) {
+      case 'golem':
+        return 'from-amber-900 via-orange-900 to-red-900'
+      case 'queen':
+        return 'from-pink-900 via-purple-900 to-fuchsia-900'
+      case 'baron':
+        return 'from-amber-950 via-stone-900 to-stone-950'
+      default:
+        return 'from-amber-900 via-orange-900 to-red-900'
+    }
+  }
+
+  const getDefeatMessage = () => {
+    switch (config.component) {
+      case 'golem':
+        return "You cannot crumble what centuries have hardened!"
+      case 'queen':
+        return "Sweetness always wins in the end, dear..."
+      case 'baron':
+        return "The flood claims all who oppose me!"
+      default:
+        return "Try again..."
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-900 via-orange-900 to-red-900">
+    <div className={`min-h-screen bg-gradient-to-br ${getBackgroundGradient()}`}>
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-2">
@@ -219,13 +280,7 @@ function BossLevelContent() {
       />
 
       {/* Battle Phase */}
-      {phase === 'battle' && (
-        <GingerbreadGolemBattle
-          onVictory={handleVictory}
-          onDefeat={handleDefeat}
-          maxTurns={config.maxTurns}
-        />
-      )}
+      {phase === 'battle' && renderBattleComponent()}
 
       {/* Defeat Screen */}
       {phase === 'defeat' && (
@@ -234,12 +289,10 @@ function BossLevelContent() {
             <div className="text-7xl mb-4">💀</div>
             <h2 className="text-3xl font-black text-white mb-2">Defeated!</h2>
             <p className="text-white/80 mb-6">
-              The {config.introStory.bossName} was too powerful...
+              {config.introStory.bossName} was too powerful...
             </p>
-            <p className="text-yellow-300 mb-6">
-              "{config.introStory.bossName === 'The Gingerbread Golem' 
-                ? "You cannot crumble what centuries have hardened!" 
-                : "Try again, little treat thief..."}"
+            <p className="text-yellow-300 mb-6 italic">
+              "{getDefeatMessage()}"
             </p>
             <div className="space-y-3">
               <button
