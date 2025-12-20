@@ -47,13 +47,20 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              <Link
-                href="/play"
-                className="rounded-2xl bg-red-900/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-red-900/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
-              >
-                🎮 Arcade Sprint
-                <span className="text-white/60 text-xs">• Endless Mode</span>
-              </Link>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/play"
+                  className="rounded-2xl bg-red-900/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-red-900/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
+                >
+                  🎮 Arcade Sprint
+                </Link>
+                <Link
+                  href="/runner"
+                  className="rounded-2xl bg-purple-900/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-purple-900/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
+                >
+                  🏃 Treat Run
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm text-white/85 pt-2">
