@@ -1,11 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { RunnerGame, RunnerResults } from '@/components/RunnerGame'
-import { Trophy, Sparkles, Zap, Home, Play as PlayIcon, MapPin, Cookie } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Trophy, Sparkles, Zap, Home, Play as PlayIcon, MapPin, Cookie, Crown, Clock, Calendar } from 'lucide-react'
+
+interface LeaderboardEntry {
+  player_id: string
+  player_name: string
+  best_distance: number
+  best_score: number
+  games_played: number
+  total_treats: number
+  top_speed: number
+}
 
 export default function RunnerPage() {
   const router = useRouter()
@@ -13,6 +24,74 @@ export default function RunnerPage() {
   const [results, setResults] = useState<RunnerResults | null>(null)
   const [bestDistance, setBestDistance] = useState(0)
   const [bestScore, setBestScore] = useState(0)
+  const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'monthly'>('weekly')
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [playerRank, setPlayerRank] = useState<number | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [playerName, setPlayerName] = useState('')
+
+  useEffect(() => {
+    checkAuth()
+    loadLeaderboard()
+  }, [leaderboardTab])
+
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setIsAuthenticated(!!user)
+    if (user?.email) {
+      setPlayerName(user.email.split('@')[0])
+    }
+  }
+
+  const loadLeaderboard = async () => {
+    try {
+      const viewName = leaderboardTab === 'weekly' 
+        ? 'runner_weekly_leaderboard' 
+        : 'runner_monthly_leaderboard'
+      
+      const { data, error } = await (supabase as any)
+        .from(viewName)
+        .select('*')
+        .limit(10)
+
+      if (error) {
+        console.warn('Leaderboard not available:', error)
+        return
+      }
+
+      setLeaderboard(data || [])
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: rankData } = await (supabase as any)
+          .rpc('get_runner_rank', { p_player_id: user.id, p_timeframe: leaderboardTab })
+        setPlayerRank(rankData)
+      }
+    } catch (error) {
+      console.warn('Failed to load leaderboard:', error)
+    }
+  }
+
+  const saveScore = async (gameResults: RunnerResults) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await (supabase as any).from('runner_scores').insert({
+        player_id: user.id,
+        player_name: playerName || 'Anonymous',
+        score: gameResults.score,
+        distance: gameResults.distance,
+        treats_collected: gameResults.treatsCollected,
+        obstacles_avoided: gameResults.obstaclesAvoided,
+        max_speed: gameResults.maxSpeed,
+      })
+
+      await loadLeaderboard()
+    } catch (error) {
+      console.error('Failed to save score:', error)
+    }
+  }
 
   const triggerHaptic = (intensity: 'light' | 'medium' | 'heavy') => {
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -21,7 +100,7 @@ export default function RunnerPage() {
     }
   }
 
-  const handleGameEnd = (gameResults: RunnerResults) => {
+  const handleGameEnd = async (gameResults: RunnerResults) => {
     setResults(gameResults)
     
     if (gameResults.distance > bestDistance) {
@@ -30,6 +109,9 @@ export default function RunnerPage() {
     if (gameResults.score > bestScore) {
       setBestScore(gameResults.score)
     }
+
+    // Save to leaderboard if authenticated
+    await saveScore(gameResults)
     
     setGameState('results')
   }
@@ -236,6 +318,96 @@ export default function RunnerPage() {
               <div className="text-xs text-yellow-400">+75</div>
             </div>
           </div>
+        </div>
+
+        {/* Leaderboard */}
+        <div className="glass rounded-2xl p-4 card-elevated">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <Crown className="w-5 h-5 text-yellow-400" />
+              Leaderboard
+            </h3>
+          </div>
+
+          {/* Tab Buttons */}
+          <div className="flex gap-1 mb-3 bg-white/10 rounded-lg p-1">
+            <button
+              onClick={() => setLeaderboardTab('weekly')}
+              className={`flex-1 py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                leaderboardTab === 'weekly' 
+                  ? 'bg-white text-purple-600' 
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              Weekly
+            </button>
+            <button
+              onClick={() => setLeaderboardTab('monthly')}
+              className={`flex-1 py-2 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                leaderboardTab === 'monthly' 
+                  ? 'bg-white text-purple-600' 
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3 h-3" />
+              Monthly
+            </button>
+          </div>
+
+          {/* Leaderboard List */}
+          <div className="space-y-2">
+            {leaderboard.length > 0 ? (
+              leaderboard.slice(0, 5).map((entry, index) => (
+                <div
+                  key={entry.player_id}
+                  className={`flex items-center gap-3 p-2 rounded-lg ${
+                    index === 0 ? 'bg-yellow-500/20 border border-yellow-400/30' :
+                    index === 1 ? 'bg-gray-400/20 border border-gray-400/30' :
+                    index === 2 ? 'bg-orange-600/20 border border-orange-500/30' :
+                    'bg-white/5'
+                  }`}
+                >
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-sm ${
+                    index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                    index === 1 ? 'bg-gray-300 text-gray-700' :
+                    index === 2 ? 'bg-orange-400 text-orange-900' :
+                    'bg-white/20 text-white'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-sm truncate">{entry.player_name}</p>
+                    <p className="text-white/50 text-xs">{entry.games_played} runs</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-white">{entry.best_distance}m</p>
+                    <p className="text-purple-400 text-xs">{entry.best_score} pts</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-white/50">
+                <Trophy className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No runs yet!</p>
+                <p className="text-xs">Be the first to run!</p>
+              </div>
+            )}
+          </div>
+
+          {playerRank && playerRank > 5 && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <div className="flex items-center gap-3 p-2 bg-purple-500/20 rounded-lg border border-purple-400/30">
+                <div className="w-7 h-7 rounded-full bg-purple-400 text-purple-900 flex items-center justify-center font-black text-sm">
+                  {playerRank}
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-white text-sm">You</p>
+                </div>
+                <p className="font-black text-white">{bestDistance}m</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

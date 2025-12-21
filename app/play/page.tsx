@@ -264,7 +264,7 @@ export default function PlayPage() {
           <Link href="/" className="bg-white/20 p-2 rounded-xl active:scale-95 transition-all">
             <Home className="w-6 h-6 text-white" />
           </Link>
-          <h1 className="text-2xl font-black text-white">Arcade Mode</h1>
+          <h1 className="text-2xl font-black text-white">🍪 Snack Attack</h1>
           <div className="w-10" />
         </div>
 
@@ -279,8 +279,8 @@ export default function PlayPage() {
               priority
             />
           </div>
-          <h2 className="text-xl font-bold text-white mb-1">60 Second Sprint</h2>
-          <p className="text-white/70 text-sm mb-4">Collect treats, avoid hazards!</p>
+          <h2 className="text-xl font-bold text-white mb-1">Snack Attack</h2>
+          <p className="text-white/70 text-sm mb-4">60 seconds to munch as many treats as possible!</p>
 
           <button
             onClick={() => setGameState('playing')}

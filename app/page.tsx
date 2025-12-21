@@ -52,7 +52,7 @@ export default function HomePage() {
                   href="/play"
                   className="rounded-2xl bg-red-900/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-red-900/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
                 >
-                  🎮 Arcade Sprint
+                  🍪 Snack Attack
                 </Link>
                 <Link
                   href="/runner"
@@ -61,6 +61,16 @@ export default function HomePage() {
                   🏃 Treat Run
                 </Link>
               </div>
+
+              <Link
+                href="/locker"
+                className="rounded-2xl bg-gradient-to-r from-pink-600/40 to-purple-600/40 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:from-pink-600/50 hover:to-purple-600/50 hover:scale-[1.02] active:scale-[0.97] transition-transform flex items-center justify-center gap-2"
+              >
+                👕 Locker Room
+                <span className="rounded-full bg-yellow-400/20 text-yellow-300 px-2 py-0.5 text-xs font-black">
+                  NEW
+                </span>
+              </Link>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm text-white/85 pt-2">
