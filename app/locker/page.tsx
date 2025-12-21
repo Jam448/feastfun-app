@@ -23,16 +23,17 @@ import {
   getItemById,
   DEFAULT_OUTFIT,
 } from '@/lib/wardrobe'
+import { PocketsAvatar } from '@/components/PocketsAvatar'
 import { supabase } from '@/lib/supabase'
 
 export default function LockerPage() {
   const [activeSlot, setActiveSlot] = useState<SlotType>('hat')
   const [currentOutfit, setCurrentOutfit] = useState<PlayerOutfit>(DEFAULT_OUTFIT)
   const [selectedColors, setSelectedColors] = useState<Record<string, string>>({})
-  const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set(['hat_none', 'hat_beanie', 'shirt_none', 'shirt_tee', 'pants_none', 'pants_jeans', 'shoes_none', 'shoes_sneakers', 'acc_none']))
+  const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set(['hat_none', 'hat_beanie', 'shirt_none', 'shirt_tee', 'shirt_hoodie', 'pants_none', 'pants_jeans', 'shoes_none', 'shoes_sneakers', 'acc_none', 'acc_glasses']))
   const [playerCrumbs, setPlayerCrumbs] = useState(500)
   const [showPurchaseModal, setShowPurchaseModal] = useState<WardrobeItem | null>(null)
-  const [previewItem, setPreviewItem] = useState<string | null>(null)
+  const [previewOutfit, setPreviewOutfit] = useState<PlayerOutfit | null>(null)
   const [showSets, setShowSets] = useState(false)
 
   useEffect(() => {
@@ -178,7 +179,8 @@ export default function LockerPage() {
     return itemId ? getItemById(itemId) : undefined
   }
 
-  const displayItem = previewItem ? getItemById(previewItem) : null
+  // Display outfit with preview if hovering
+  const displayOutfit = previewOutfit || currentOutfit
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 p-4 safe-top">
@@ -194,39 +196,14 @@ export default function LockerPage() {
           </div>
         </div>
 
-        {/* Character Preview */}
+        {/* Character Preview with actual clothing */}
         <div className="glass rounded-3xl p-6 mb-4 card-elevated">
-          <div className="relative w-40 h-40 mx-auto mb-4">
-            {/* Base Pockets */}
-            <Image
-              src="/santa_pockets.png"
-              alt="Pockets"
-              fill
-              className="object-contain drop-shadow-2xl"
-              priority
+          <div className="flex justify-center mb-4">
+            <PocketsAvatar 
+              outfit={displayOutfit}
+              colors={selectedColors}
+              size="xl"
             />
-            
-            {/* Outfit overlays would go here - for now showing equipped emojis */}
-            <div className="absolute -right-2 -top-2 flex flex-col gap-1">
-              {currentOutfit.hat && currentOutfit.hat !== 'hat_none' && (
-                <span className="text-2xl">{getItemById(currentOutfit.hat)?.emoji}</span>
-              )}
-            </div>
-            <div className="absolute -left-2 top-1/3 flex flex-col gap-1">
-              {currentOutfit.accessory && currentOutfit.accessory !== 'acc_none' && (
-                <span className="text-xl">{getItemById(currentOutfit.accessory)?.emoji}</span>
-              )}
-            </div>
-            <div className="absolute -right-2 bottom-1/3">
-              {currentOutfit.shirt && currentOutfit.shirt !== 'shirt_none' && (
-                <span className="text-xl">{getItemById(currentOutfit.shirt)?.emoji}</span>
-              )}
-            </div>
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 flex gap-1">
-              {currentOutfit.shoes && currentOutfit.shoes !== 'shoes_none' && (
-                <span className="text-lg">{getItemById(currentOutfit.shoes)?.emoji}</span>
-              )}
-            </div>
           </div>
 
           {/* Current Outfit Summary */}
@@ -236,13 +213,17 @@ export default function LockerPage() {
               return (
                 <div
                   key={slot}
-                  className={`px-2 py-1 rounded-lg text-xs ${
-                    item && item.id !== `${slot}_none` && item.id !== 'acc_none'
-                      ? RARITY_CONFIG[item.rarity].bgColor
-                      : 'bg-white/10'
+                  onClick={() => { setActiveSlot(slot); setShowSets(false); }}
+                  className={`px-3 py-2 rounded-lg text-xs cursor-pointer transition-all hover:scale-105 ${
+                    activeSlot === slot && !showSets
+                      ? 'bg-white text-purple-600 font-bold'
+                      : item && item.id !== `${slot}_none` && item.id !== 'acc_none'
+                        ? RARITY_CONFIG[item.rarity].bgColor + ' text-white'
+                        : 'bg-white/10 text-white/70'
                   }`}
                 >
-                  <span className="text-white/70">{item?.emoji || '❌'}</span>
+                  <span>{item?.emoji || '❌'}</span>
+                  <span className="ml-1 capitalize">{slot}</span>
                 </div>
               )
             })}
@@ -338,8 +319,11 @@ export default function LockerPage() {
                   <motion.button
                     key={item.id}
                     onClick={() => handleItemSelect(item)}
-                    onMouseEnter={() => setPreviewItem(item.id)}
-                    onMouseLeave={() => setPreviewItem(null)}
+                    onMouseEnter={() => {
+                      // Preview this item on the avatar
+                      setPreviewOutfit({ ...currentOutfit, [item.slot]: item.id })
+                    }}
+                    onMouseLeave={() => setPreviewOutfit(null)}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className={`relative p-3 rounded-xl transition-all ${
@@ -383,48 +367,6 @@ export default function LockerPage() {
                   </motion.button>
                 )
               })}
-            </div>
-          </div>
-        )}
-
-        {/* Item Details / Preview */}
-        {displayItem && (
-          <div className="mt-4 glass rounded-2xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="text-4xl">{displayItem.emoji}</div>
-              <div className="flex-1">
-                <h3 className="font-bold text-white">{displayItem.name}</h3>
-                <p className="text-white/70 text-sm">{displayItem.description}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className="text-xs font-bold"
-                    style={{ color: RARITY_CONFIG[displayItem.rarity].color }}
-                  >
-                    {RARITY_CONFIG[displayItem.rarity].label}
-                  </span>
-                  {displayItem.price && !ownedItems.has(displayItem.id) && (
-                    <span className="text-yellow-400 text-xs">🍪 {displayItem.price}</span>
-                  )}
-                </div>
-
-                {/* Color options */}
-                {displayItem.colors.length > 0 && ownedItems.has(displayItem.id) && (
-                  <div className="flex gap-1 mt-2">
-                    {displayItem.colors.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => handleColorSelect(displayItem.id, color)}
-                        className={`w-6 h-6 rounded-full border-2 ${
-                          selectedColors[displayItem.id] === color
-                            ? 'border-white'
-                            : 'border-transparent'
-                        }`}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
