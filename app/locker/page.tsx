@@ -25,17 +25,12 @@ import {
 } from '@/lib/wardrobe'
 import { supabase } from '@/lib/supabase'
 
-interface LockerPageProps {
-  crumbs?: number
-  onPurchase?: (itemId: string, price: number) => Promise<boolean>
-}
-
-export default function LockerPage({ crumbs = 0, onPurchase }: LockerPageProps) {
+export default function LockerPage() {
   const [activeSlot, setActiveSlot] = useState<SlotType>('hat')
   const [currentOutfit, setCurrentOutfit] = useState<PlayerOutfit>(DEFAULT_OUTFIT)
   const [selectedColors, setSelectedColors] = useState<Record<string, string>>({})
   const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set(['hat_none', 'hat_beanie', 'shirt_none', 'shirt_tee', 'pants_none', 'pants_jeans', 'shoes_none', 'shoes_sneakers', 'acc_none']))
-  const [playerCrumbs, setPlayerCrumbs] = useState(crumbs)
+  const [playerCrumbs, setPlayerCrumbs] = useState(500)
   const [showPurchaseModal, setShowPurchaseModal] = useState<WardrobeItem | null>(null)
   const [previewItem, setPreviewItem] = useState<string | null>(null)
   const [showSets, setShowSets] = useState(false)
